@@ -1,6 +1,6 @@
 # MLOps Course
 
-Learn how to combine machine learning with software engineering to build production-grade applications.
+Learn how to combine machine learning with software engineering to build production-grade applications. 
 
 > MLOps concepts are interweaved and cannot be run in isolation, so be sure to complement the code in this repository with the detailed [MLOps lessons](https://madewithml.com/#mlops).
 
