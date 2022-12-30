@@ -52,11 +52,7 @@ Start Web service
 # Convert markdown to docx --> upload to google doc
     pandoc -o mlops-notes.docx -f markdown -t docx notes.md
 
-#
 
-git remote rm origin
-git remote set-url origin https://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@github.com/thomaschangsf/mlops.git
-git push -u origin main
 
 ```
 
