@@ -13,7 +13,7 @@ Learn how to combine machine learning with software engineering to build product
 </div>
 
 - Lessons: https://madewithml.com/#mlops
-- Code: [GokuMohandas/mlops-course](https://github.com/GokuMohandas/mlops-course)
+- Code: [GokuMohandas/mlops](https://github.com/GokuMohandas/mlops-course)
 
 <table>
 	<tbody>
