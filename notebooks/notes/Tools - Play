@@ -1,0 +1,251 @@
+// --------------------------------------------------------------------
+// Concpets
+// --------------------------------------------------------------------
+- Router -> Controller -> Action -> Result
+	* Router (ie SimpleRouter)
+		- maps a http request to a [CONTROLLER].[ACTION]
+	* Controller
+		- contains multiple actions
+		- one way to demarcate multiple "services" in my ws
+	* Actions
+		- Represents the business logic that is executed on the HTTP Rquest
+		- Are methods declared in a class extending  the Controller  class
+		- By default is synchrnous. To make it synchronous, 
+			Action.async { Future { logic.. } } (ec)
+	* trait Result
+		- reprsent reaspond body, header to send back to the client
+		- has inner class Status
+			* Result.OK = new status(OK_CONSTANT=200) 
+	* Example
+		- Action.async{ 
+			Result.OK(
+				Json.toJson(Seq("blah,blah")) // if put in json, result.contentType=Json; if plain string --> contentType=text	
+			) 
+		} 
+
+
+// --------------------------------------------------------------------
+// Play Start Project
+// 		We will set up remote debugger on Play project
+// --------------------------------------------------------------------
+- Reference
+	https://stackoverflow.com/questions/4150776/debugging-scala-code-with-simple-build-tool-sbt-and-intellij
+
+cd /Users/thomaschang/Documents/dev/git/tutorial/
+
+- Create new project
+	sbt new playframework/play-scala-seed.g8
+		play-samples-play-scala-starter-example, which is from play website, is not compatible with java 17, my local java.
+
+		set scala version = 2.12.14 in project tempalte
+
+		change project/build.info --> 
+
+
+	JDK 17 --> Java 
+
+	Play support Java 8 and 11
+		javaSetJdk8
+
+- change project/build.properties
+	sbt.version=1.6.1
+
+- Play Structures
+	conf/
+		routes: 				endpoint --> Singles.method
+		application.conf
+
+	app/
+		views/					xml 
+
+		controller/
+								Defines Controller objects, which utilizes Guice depenedency injection to instantiate the class.  Guice depenedency depends on the services directory 
+
+								Controller methods are Action objects that return values of Result type.  Subtypes of Result are Ok, BadRequest, etc, which are defined in Results.scala
+
+		services/
+								Defines concrete Service Implementation. Guice dependency injection will look in the service directory to map the classes
+
+		routers/				Dynamically define how to route a endpoint; can read config file
+
+	Module.scala 				File defines the dependency injection (see below)
+
+	Filters.scala               Every web request can be enriched with functionality, such as credential or prometheus metrics (see below)
+
+
+
+- Change java version: play only support Java 8 and 11
+	javaSetJdk11
+		
+
+- sbt clean compile
+
+- Configure IDE
+	Run --> Edit Configuration --> Add Remote JVM Debug -->
+		debugger_mode = listen, auto restart, port=5005
+		user module class path: select project
+	Set set breakpoints
+
+- Start sbt with: sbt -jvm-debug 5005 
+	~run -Dconfig.file=conf/application.conf
+
+- Intellij: start debugger
+
+- Check process runninog on port 9000 and 5005
+	lsof -n -i:5005 | awk '{print$2}'
+	lsof -n -i:5005 | awk '{print$2}' | xargs kill -9
+
+	java play process runs on both ports 5005 and 9000
+
+- browser: localhost:9000
+	notice browser uses port 9000
+
+Idea should step throught the code
+
+
+// ------------------------------------------------------------------------------------
+// Code snippets
+// ------------------------------------------------------------------------------------
+<-- Module.scala
+	class Module extends AbstractModule {
+	  override def configure() = {
+	  	// bind(classOf[TRAIT].to(classOF[IMPL]))
+	    bind(classOf[Authorization]).toInstance(new Authorization(AuthorizationSettings()))
+	    bind(classOf[AuthSettingReloadTask]).asEagerSingleton()
+	    bind(classOf[MetricReporter]).to(classOf[MetricReporterImpl])
+	  }
+	}
+
+	Then in controller class, use @inject to dependency injection objects into the class constructor, ie reporter
+	@Singleton
+	class StatusController @Inject() ( cc: ControllerComponents, reporter: MetricReporter) (implicitec: ExecutionContext)  extends AbstractController(cc) {
+		def metrics: Action[AnyContent] = Action.async { r: Request[AnyContent] =>
+        setSumAvgToGauge(apiLatencySummary, apiLatencyGauge)
+        val metricResults = reporter.metrics.map(output => Ok(output))
+        metricResults.onComplete((_ => clearMetrics()))
+        metricResults
+      }
+  
+<-- Filter.scala
+		import play.api.http.DefaultHttpFilters
+		class Filters @Inject() (
+		  metricsFilter: MetricFilter
+		) extends DefaultHttpFilters(metricsFilter)
+
+		class MetricFilter @Inject() (metricReporter: MetricReporter)(implicit val mat: Materializer, ec: ExecutionContext) extends Filter {
+		  def apply(nextFilter: RequestHeader => Future[Result])(requestHeader: RequestHeader): Future[Result] = {
+		    if ( metricReporter.checkPathIsDisabled(requestHeader.path) || metricReporter.checkMetricIsDisabled() ) {
+		      nextFilter(requestHeader)
+		    } else {
+		      val requestTimer = metricReporter.httpDurationSeconds.startTimer()
+		      nextFilter(requestHeader).transform(
+		        result => {
+		          metricReporter.httpTotalRequests.labels(s"${result.header.status}").inc()
+		          result
+		        },
+		        exception => { }
+			}
+
+<-- router/ApiRouter.scala
+	class ApiRouter @Inject() (dataset: DatasetController,instance: DatasetInstanceController, lineage: DatasetLineageController, statusController: StatusController) extends SimpleRouter {
+		private lazy val config = new Configuration(ConfigFactory.load())
+
+		case GET(p"/status") => statusController.status
+	      
+		case GET(p"/$other") => config.getOptional[String]("acdc.metrics.endpoint") match {
+	      case Some(metricEndpoint) =>
+	        if (other.equals(metricEndpoint))
+	          statusController.metrics else statusController.unknownPath
+	      case _ => statusController.unknownPath
+	    }
+	}
+
+
+<-- Testing Endpoints with FakeRequest
+	import org.scalatestplus.play.PlaySpec
+	import org.scalatestplus.play.guice.GuiceOneAppPerSuite
+	import play.api.http.Status
+	import play.api.test.FakeRequest
+	import play.api.test.Helpers._
+
+	class FunctionalSpec extends PlaySpec with GuiceOneAppPerSuite {
+		"HomeController" should {
+		    "render the index page" in {
+		      val home = route(app, FakeRequest(GET, "/")).get
+		      status(home) mustBe Status.OK
+		      contentType(home) mustBe Some("text/html")
+		      contentAsString(home) must include ("Welcome to Deviner")
+		    }
+		}
+		"Routes" should {
+		    "send 404 on a bad request" in  {
+		      route(app, FakeRequest(GET, "/boum")).map(status(_)) mustBe Some(NOT_FOUND)
+		    }
+		}
+
+
+// ------------------------------------------------------------------------------------
+// Class Injection
+// ------------------------------------------------------------------------------------
+<-- Module.scala
+	    bind(classOf[Metric]).to(classOf[PrometheusMetric])
+
+<-- PrometheusMetric.scala
+	trait Metric {
+
+	}
+
+	@Singleton
+	class PrometheusMetric @Inject() // <-- NOTE1 !!!
+		(implicit ec: ExecutionContext) extends Metric {
+
+
+
+	If you want to system to use dependnecy injection on create PrometheusMetric, we need at least one @Inject at ProemtheusMetric's constructor, even if it is an empty constructor
+
+		Error Message:
+				1) No implementation for services.PrometheusMetric (with no qualifier annotation) was bound, and could not find an injectable constructor. Injectable classes must have either one (and only one) constructor annotated with @Inject or a zero-argument constructor that is not private.
+  
+
+
+
+<-- Snippet: 
+	case class ProfileAction[A] @Inject() (
+	  metric: Metric
+	)(action: Action[A]) extends Action[A] {
+
+	  def apply(request: Request[A]): Future[Result] = {
+	    parseRequest(request) match {
+	      case Some( (staticPath, argument) ) =>
+	        val callback = metric.startApiTimer (staticPath, argument, request.method)
+	        val actionResult: Future[Result] = action (request)
+	        actionResult.onComplete (_ => callback () ) (executionContext)
+	        actionResult
+	      case _ => action(request)
+	    }
+	  }
+
+	  private def parseRequest(request: Request[A]): Option[(String, String)] = {
+	    if ( metric.checkPathIsDisabled(request.path) || metric.checkMetricIsDisabled )
+	      None
+	    else {
+	      val (staticPath, args) = request.path
+	        .split("/")
+	        .filter(_.nonEmpty)
+	        .foldLeft((List[String](), List[String]())) {
+	          case ( (Nil, l2), token) => (List(token), l2)
+	          case ( (h::t, l2), token ) => if (STATIC_PATH_MARKERS.contains(h)) (h::t, token::l2)
+	            else (token::h::t, l2)
+	        }
+	      Some((staticPath.reverse.mkString("-") , args.reverse.mkString("-")))
+	    }
+	  }
+
+	  override def parser: BodyParser[A] = action.parser
+	  override def executionContext: ExecutionContext = action.executionContext
+	}
+
+	object ProfileAction  {
+	  val STATIC_PATH_MARKERS = Seq("instance", "dataset", "lineage", "__metrics", "__status")
+	}
+

@@ -1,0 +1,868 @@
+// ------------------------------------------
+// Concepts
+// ------------------------------------------
+<-- Monads
+	Monads is a trait which implements two methods
+		trait Monad[+T] {
+		  def flatMap[U]( f : (T) => Monad[U] ) : Monad[U]
+		  def unit(value : B) : Monad[B]
+		}
+
+	- The purpose of flatMap is to compose multiple operations and delay handling lazily the error case. 
+		Ex: The for yeild loop  
+			val result: scala.util.Try[Int] = for { 
+				a <- Try("5".toInt)
+				b <- Try("Dope".toInt)
+			} yield (a + b)
+
+			result match {
+				Success(v) => ..,
+				Failure(e) => ...
+			}
+
+	- The purpose of unit is wrap a value, such as Success(s), Some(s)
+		The map method uses the unit method
+
+		def map[U](f : (T) => U) : Monad[U] = flatMap(v => unit(f(v)))
+
+<-- Alegebraic Data Type (ADT)
+	- ADT are types form by multiple types
+	- Use pattern matching to decompose by type
+	- References
+
+	- Examples
+		* List
+			Nil for an empty list and Cons x xs for the combination of a new element x with a list xs to create a new list
+
+			data List a = Nil | Cons a (List a)
+
+		* Trees
+			data Tree = Empty
+	          | Leaf Int
+	          | Node Tree Tree
+
+
+	         Applying pattern matching
+	         	switch on (data.constructor)
+				   case Empty:
+				     return 0
+				   case Leaf:
+				     let n = data.field1
+				     return 1
+				   case Node:
+				     let l = data.field1
+				     let r = data.field2
+				     return 1 + max (depth l) (depth r)
+
+
+// ------------------------------------------
+// Syntax and Hows
+// ------------------------------------------
+
+<-- Iterations
+	* With Indexes
+		(0 until 5).map{ i => print(i)} //0,1,2,3,4
+
+		(0 until 5).zipWithIndex.map{ case(num, index) => num }
+	
+	* For yields
+		for {
+			num <- Seq(1,2,3)
+			antecedent, freq, consequent, lift) <- dfCombined3 // pattern matching
+		} yield {
+			num + 1
+		}
+
+<-- Scala Concepts
+	* References
+		https://www.scala-exercises.org/scala_tutorial/classes_vs_case_classes
+
+
+	* Higher Order Functions
+		- higher order functions: pass function as input parameters; functions are like variables; 1st class citizen
+			* Example: Higher order Function
+				def sum(f: Int => Int, a: Int, b: Int): Int =
+				  if (a > b) 0
+				  else f(a) + sum(f, a + 1, b)
+
+				def id(x: Int): Int = x
+				def sumInts(a: Int, b: Int) = sum(id, a, b)
+				def sumCubes(a: Int, b: Int) = sum(cube, a, b)
+
+		- Anonymous function:
+			* Notice in our example above, we can get many function definition; ie Spark UDF.  An alternative is to use anonymous function
+
+			* syntax: (x: Int, y: Int) => x + y
+
+
+			* Example: Anonymous Funcion
+				def sumInts(a: Int, b: Int) = sum(x => x, a, b)
+				def sumCubes(a: Int, b: Int) = sum(x => x * x * x, a, b)
+
+
+	* Tail Recursion: Recursion
+		If a recursive function calls itself as its last action, then you can reuse the stack frame of that function, giving it performance on par with a loop. IE tail recursion.
+
+		@tailRec is a syntatic sugar to check if function is truly tail recursion
+
+		Ex: Not tail recursion
+			def factorial(n: Int): Int =
+				  if (n == 0) 1 else n * factorial(n - 1)
+
+			4 * (3 * (2 * (1 * factorial(0)))
+
+			The last step the function does is multiple the previous subresults, ie 4,3,2
+
+		Ex1: Tail recursion
+			- 
+			- need to transform so states (tmp and final) is passed as part of input parameter
+
+			def factorial(n: Int): Int = {
+			  @tailrec
+			  def iter(x: Int, result: Int): Int =
+			    if (x == 0) result
+			    else iter(x - 1, result * x)
+
+			  iter(n, 1)
+			}
+		Ex2:
+			@tailrec
+		    def helper(pmf: ProbabilityMassFunction, sortedLevels: Seq[Double], leftIndex: Int, rightIndex: Int, currentLevel: Double, intervals: Seq[ConfidenceInterval]): Seq[ConfidenceInterval] = {
+		      if (sortedLevels.isEmpty) {
+		        intervals
+		      } else {
+		        val interval = X(pmf.values(leftIndex), pmf.values(rightIndex), sortedLevels.head)
+		        helper( pmf, sortedLevels.tail, leftIndex, rightIndex, currentLevel, interval +: intervals )
+			  }
+
+
+	* Sealed traits
+		-  Sealed trait can be extened in the same file as its delcaration; an alternative to enums
+		-  Sealed traits also compells comprehensive pattern matches
+
+	* Pattern matching
+		- is a mechanism for checking a variable/function's value against a pattern
+			* successful match can deconstruct a value into parts, ie a deconstruct a list value -->  case head::tail
+			* alternative to a seris of if else
+
+		- Ex: Simple
+			fnReturnsValue match 
+				case 1: ==> "one"
+				case _ => "two"
+
+		- Ex: Case class with pattern guards (ie if)
+			sealed trait Notification # tells pattern match to raise warining if cases are not exhaustive
+			case class Email(sender: String, title: String, body: String) extends Notification
+			case class SMS(caller: String, message: String) extends Notification 
+
+			def showNotification(notifacation: Notification, whitList: Seq[String]): String = {
+				notification match 
+					case Email(sender, titile, _) if whiteLIst.contains(sender) => s"You've got $sender.."
+					case _ => s"DOPE"										
+			} 
+
+		- Ex: case match on type
+			notification match {
+				e: Email => e.body
+				s: SMS => s.message
+			}
+
+
+	* case class: Structuring information
+		- Used to aggregate information
+
+		- Case class defines extra methods and comes with companion object
+			when creating an instance, do not need the new keyword
+
+		- Case class can be used for pattern matching
+			c3 match {
+			  case Note(name, duration, octave) => s"The duration of c3 is $duration"
+			}
+
+
+		- Vs tuples
+			can be used for pattern matching; when you don't want case class and its whole pacakge
+
+			val is: (Int, String) = (42, "foo")
+
+			is match {
+			  case (i, s) => ....
+			}
+
+	* Companion objects
+		- object Persion is a companion object to the class
+		- companion object and its class can access each other private variable and methods
+		- companion object's apply method is a factory method for the class; it enables one to instantiate a person class without new keyword
+
+		Ex:
+			class Person {
+			    var name: Option[String] = None
+			    var age: Option[Int] = None
+			}
+
+			object Person {
+				val type = "HUMAN"
+
+			    // a constructor
+			    def apply(name: Option[String]): Person = {
+			        var p = new Person
+			        p.name = name
+			        p
+			    }
+
+
+	* Trait vs abstract classes
+		a class can inherity from multiple traits, but only 1 abstract class
+
+		abstract classes can have pre-defined methods
+
+	* ExecutionContext
+		Specifies which thread your callback will execute on
+			ex: global --> ExecutionContext.global
+			ex: one can specify more fine grain using implicit
+				class A (implicit ec: ExecutionContext)
+		The intent of ExecutionContext is to lexically scope code execution for a method, class, application
+		
+	* Matterializer (Akka)
+		A component that is responsible for turning the stream blueprint into a running stream and emitting the “materialized value		
+	
+	* null vs Null vs Nil vs None vs Unit vs Nothing (https://www.baeldung.com/scala/nil-null-nothing-unit-none)
+		- null refferences represent an absent value
+			val x = null
+
+			bad to have variables that a null
+				Option(null) --> None
+				val s: List[Int] = Nil
+
+		- Null is a type
+
+		- Nil : empty list
+			val s: List[Int] = Nil
+
+		- None
+			None is a subtype of Option type; 
+
+			Wrap a return value in Option type where the function may NOT return a value
+
+		- Nothing
+
+
+	* Try vs Option
+		Try --> { Success, Failure}
+			Use to catch exceptions
+
+		Option --> Some, None
+			A special type of error that can occur is the absence of some value (ie null)
+
+		Either
+			When you need to know something more than there is a missing value
+
+			def validateName(name: String): Either[String, String] = {
+				if (name.isEmpty) Left("Name cannot be empty")
+				else Right(name)
+			}
+
+
+		All can delay error handling lazily
+
+
+
+	* Exception handling
+		Scala.util.control.Excpetions.Catch creates a Catch object from an exception
+
+		One idiom is to convert Catch object can be converted to Try, Option, or Either
+
+		Ex:
+			- val n: Option[Int] = catching(classOf[RuntimeException]).opt {
+          		Retry() {
+            		numRuns += 1
+            		throw new RuntimeException("Throw")
+          		}
+        	}
+
+        	- val result: Either = catching(classOf[RuntimeException]) either { ... }
+
+
+	* Multiple Parameter Lists (aka Currying)
+		Methods may have multiple parameter lists
+
+		Ex: foldLeft
+			trait Iterable[A] {
+  				def foldLeft[B](z: B)(op: (B, A) => B): B
+			}
+
+			Range(10).foldLeft
+				(List.empty[]()) 					// param list 1 is type B
+				{ (lst, item) => item::lst  } 		// param list 2 is a function
+
+
+<-- Collections
+	* Instantiation
+		- List[Int]()
+
+	* Mutable allows one to add
+		- Sets
+			var fruits = scala.collection.mutable.Set[String]()
+			fruits += ("apple", "Apple")
+			fruits += "berries"
+
+			fruits.contains("banana")
+
+		- ListBuffer
+			import scala.collection.mutable.ListBuffer
+			var fruits = new ListBuffer[String]()
+			fruits += "Apple"
+			fruits += ("Banana", "Orange")
+
+		- Maps
+			val m = scala.collection.mutable.Map[String, scala.collection.mutable.ListBuffer[Pairs]]()
+			m += ( key -> value)
+
+			++: Map1 ++ Map2 : add new entries; overwrite old ones
+			val m = Map("k1" -> 2)
+			val n = m ++ Map("k2" -> 3) 	//Map(k1 -> 2, k2 -> 3)
+			val o = m ++ Map("k1" -> 100) 	//Map(k1 -> 100)
+
+			val p = m + ("k4" -> 3) 	//Map(k1 -> 2, k4 -> 3)
+
+
+	* Performance: 
+		refer to https://docs.scala-lang.org/overviews/collections/performance-characteristics.html
+
+	* zipWithIndex	
+		Seq("Tom", "Bernice").zipWithIndex{ case(name, index) => doSomething() }
+
+	* headOption
+		Pythontic way to get first element if exists
+		
+		Ex1: 
+			case class Fruits(name: String)
+			Seq(Fruits("apple")).headOption.map(_.name).getOrElse("DOPE") //returns "apple"
+
+		Ex2:
+			val a = Seq(1,2,3)
+			A: 
+				a.headOption match {
+					case Some(n) => logic 1
+					case _ => logic 2
+				}
+			B:
+				a.headOption.orElse()
+
+	* Map
+		- Map can add a tuple 
+			Map("k1" -> 1) + ("k2" -> 2) 
+			Output: Map(k1 -> 1, k2 -> 2)
+		- Map can be updated/replaced by a tuple
+			Map("k1" -> 1) + ("k1" -> 2) 
+			Output: Map(k1 -> 2)
+
+	* reduce vs fold
+		both functions takes a function input parameter to operate on every element in a sequence, returning a singular value
+
+		fold, in addition, takes a initial value
+
+
+		val s = Seq(1, 2, 3, 4)
+
+		val r1 = s.reduce( (e1, e2) => e1 + e2  ) # 10
+
+		val r2 = s.fold(5) ( (e1, e2) => e1 + e2 ) #15
+
+
+
+
+	* foldLeft
+		val iter = Seq( 
+		    List("Happy", "Birthday", "K"),
+		    List("Happy", "Birthday", "A"),
+		    List("Happy", "Birthday", "T")
+		)
+
+		iter
+			.flatMap(_.toSet) // Creates a list of words
+			.foldLeft(0)( (accum, currWord) => accum + currWord.length) // counts the sum of all the words
+
+
+
+		iter
+	    .flatMap(_.toSet) // Creates a list of words
+	    .foldLeft(scala.collection.mutable.ListBuffer("dope"))( (accum, currWord) => accum += currWord )  
+
+
+
+	* groupBy: Given a sequence, return a dict
+		val labelToCntMap = labelsInQuantile.groupBy(identity).mapValues(vs => vs.size)
+		val labelToCntMap = labelsInQuantile.groupBy(k => k).mapValues(vs => vs.size)
+
+		mapValues transform the value of a dict
+
+		Ex: working with tuples
+			val sltStats = Seq(
+				("2022-08-17", "appraisal|1.2566,janssen|1.2204,aipac|1.2108,www|1.1177,registering|1.1147,field|1.1120,contact|1.0890,reception|1.0854,congratulations|1.0372"),
+				("2022-08-18", "appraisal|11.2566,janssen|1.2204,cat|1.0372")
+			)
+
+			val tokenToScore = sltStats.flatMapTry {
+	            r.value
+	              .split(",")
+	              .map { _.split("\\|") }
+	              .map { arr => (arr(0), r.dayStr, arr(1).toDouble) }
+	          }.toOption
+	        )
+	        .flatten
+	        .groupBy(_._1) // returns Map("token", ("token", "date", "score"))
+	        .map { case (_, v) => v.maxBy(_._2) } // v is ("token", "date", "score")
+	        .map(t => (t._1, t._3)
+	        .toMap
+
+	* Appending a set and a number to a set
+		val a = scala.collection.mutable.Set(1,2) //Has to be mutable
+		val b = Set(2,3)
+		a ++= b // append a set
+		a += 4  // append a number
+
+
+	* dropWhile vs filter
+		- dropWhile will remoeve elements and stop at first element that returns true
+		- filter will iterate through the entire sequence
+
+		val a = (0 to 12).toList
+		a.dropWhile(_ < 3) --> List(3 ... 12)
+		a.filter(_%3 ==0) --> List(0, 3, 6, 9, 12)
+
+	* Regex: Replace mulltiple character into sinlge character
+		"Hi    Tom".replaceAll(" +", " ")
+			Hi Tom
+      	
+      	"Hi ~ ~ ~ apple".replaceAll("( ~)+", " ~")
+      		 Hi ~ apple
+
+    * Regex: Split by special toekn
+    	"Hi %%firstName%% Today is a great %%time%%".split("\\%(.*?)\\%")
+    		Array("Hi ", "firstName", " Today is a great ", "time")
+
+
+    * raw"\xyz" vs """ """ AND scala.util.maching.Regex
+    	Both are ways to handle escape characters; they are used to represent regular expression
+    		val indAllNumbersExpr: scala.util.matching.Regex = raw"(\d+)".r 
+
+    	However, raw supports variable interpolation.
+
+    	Ex1: Raw vs """
+	    	val n = """\d"""
+			val withRaws: scala.util.matching.Regex = raw"""\n$n""".r
+			//withRaws: scala.util.matching.Regex = \n\d
+
+			val withTripleQuote = """\nhi"""
+			//withTripleQuote: String = "\\nhi"
+
+		Ex2: Using raw, """: Split by %% %%
+			(a) "Hi %%firstName%% Today is a great %%time%%".split("\\%(.*?)\\%")
+			(b) "Hi %%firstName%% Today is a great %%time%%".split("""%(.*?)%""")
+			(c) "Hi %%firstName%% Today is a great %%time%%".split(raw"%(.*?)%")
+
+			All 3 returns Array("Hi ", "firstName", " Today is a great ", "time")
+
+		Ex3: Applied to scala.util.matching.Regex
+			based on java.util.regex pacakge; so Ex2 syntaxes are based on this.
+
+			Continuing from Ex2
+				val t = "Hi %%firstName%% Today is a great %%time%%"
+				val regex: scala.util.matching.Regex = raw"%(.*?)%".r
+				regex.findAll(t).toList // List("%%", "%%", "%%", "%%")
+
+				regEx.replaceAllIn(t, "") 
+
+			scala Regex can be used to case match, replaceAll
+				https://www.scala-lang.org/api/2.13.6/scala/util/matching/Regex.html
+
+
+		Ex4: more examples of Regex
+			val t = "Hi ~ ~ ~ apple"
+
+			val rSingle = raw" ~".r
+			rSingle.replaceAllIn(t, " *") 	//"Hi * * * apple"
+
+			val rMultiple = raw"( ~)+".r
+			rMultiple.replaceAllIn(t, " *") //"Hi * apple" 
+
+		Ex5: More complex REgex: what if we have sepcial characters, ie {{ in our regex?
+			\Q and \E are respectively the start and end of a literal string in a regex literal; they instruct the regex engine to not interpret the text inbetween those two "markers" as regexes
+
+			val dynamic = "{{dynamic}}" //{{ and }} are special chacters; Q and E is hepful here
+			val t = raw"Hi $dynamic $dynamic $dynamic"
+			val r = raw"( \Q$dynamic\E)+".r  
+			r.replaceAllIn(t, s" $dynamic") //Outputs Hi {{dynamic}}
+
+			With Q and E, would need to use \\. Argh. Ugly
+				"Hi {{dynamic}} {{dynamic}} {{dynamic}} apple".replaceAll(s"( \\{\\{dynamic\\}\\})+", " ~")
+
+		Note: gotcha
+			s interpolator (ie s"$variable" ) turns escapes back on even with """ """. That's why we need raw
+
+			"hi\nthere."
+			s"""hi\nthere."""
+				Both produces !!
+					hi
+					there.
+
+			raw"""hi\nthere."""
+				produces
+					hi\nthere.
+
+
+			val dynamic = "{{dynamic}}"
+			val t = s"Hi $dynamic $dynamic $dynamic"
+			t.replaceAll("""( \{\{dynamic}})+""", s" $dynamic")
+
+
+
+    * Case classes
+		It turns out that case classes are just a special case of classes, whose purpose is to aggregate several values into a single value.
+
+		The Scala language provides explicit support for this use case because it is very common in practice.
+
+		So, when we define a case class, the Scala compiler defines a class enhanced with some more methods and a companion object.
+
+		https://www.scala-exercises.org/scala_tutorial/classes_vs_case_classes
+
+
+	* Span
+		https://www.garysieling.com/blog/scala-span-example/
+
+		span method lets you split a stream into two parts, by providing a function that detects the dividing line where you want the split to occur. 
+
+		var (a, b) = Stream.from(1).span(_ < 10)
+		a: scala.collection.immutable.Stream[Int] = Stream(1, ?)
+		b: scala.collection.immutable.Stream[Int] = Stream(10, ?)
+
+
+	* forall vs exists
+		- forall returns true if every operator on element returns true
+		- exists returs true if just one operator on the element returns true
+		- Ex:
+			val c = 1 to 10
+
+			c.forall{ i => i%2 == 0 } --> returns false
+			c.exists{ i => i%2 == 0 } --> returns true
+
+	* Error handling with Either: Left Right
+		Left Right is an alternative to Try, Optoin and None to handle errors
+		
+		Vs Try
+			Try is a more specific version of Either; Try either returns Success or failure.  Either returns one or the other, where the other does not always have to be an exception
+				Use Try to compose mutiple computations
+			
+				Ex:
+					val result = Try("4".toInt).map( v => v * v ).map( v => v / 2 )
+					  result match {
+					    case Success(v) => v === 8
+					    case Failure(e) => throw new IllegalStateException("should not have come here")
+					  }
+
+		Ex0:
+			def divideXByY(x: Int, y: Int): Either[String, Int] = {
+	     	if (y == 0) Left("Dude, can't divide by 0")
+	     		else Right(x / y)
+	     	}
+
+	    	diviedXByY(10, 0).foreach(x => print("TWC"))
+
+		Ex1:
+			parse(input) match {
+		      case Left(_) => println(s"Invalid JSON: $input")
+		      case Right(json) => println(s"Parsed JSON: $json")
+		    }
+
+		Ex2: 
+		  - Left Right can be converted to Try via the method toTry
+		  
+		  val stateChangeReason = decode[EMRClusterStateChangeReason] (
+		  	event.toTry.get.detail.stateChangeReason)
+	      	stateChangeReason.isRight should be(true)
+	      	stateChangeReason.map(_.code) should equal(Right(""))
+	      	stateChangeReason.map(_.message) should be(Right(None)
+      	  )
+
+	    Ex3: 
+	    	https://git.infra.igodigital.com/-/ide/project/mce/mce-ops-cloudwatcher/tree/master/-/src/test/scala/com/salesforce/mce/ops/lambda/CloudWatchDecoderSpec.scala/
+
+	* Sort
+		val s = Seq( (2, 0), (1, 2), (2,1), (5, 0) )
+		s.sorted(Ordering[(Int, Int)].reverse) // descending; Ordering by default is ascending
+
+	* Formating
+		Ex1: Two 2 decimal places
+			import java.text.DecimalFormat
+			lazy val df = new DecimalFormat(".00")
+			s"Minimum: ${df.format(minimum)} 
+
+	* Future(task) vs Future.successful(task) and Future.failure()
+		Future.successful & Future.failure() returns the result immediately, but will block
+
+		Future(task) will put the task in the execution queue, taking up resources
+
+		For immediate results (ie happy path like OK() or failure), use Future.successful and Future.failure
+
+
+
+<-- MultiLingual
+	* Dealing with CJKV: Chinese-Japanese-Korean-Vietnames
+		- codepoint: how character is represented
+			* ascii vs unicode
+				ascii can only suppot US; unicode supports all languages
+			* Ex:
+				val s = "欢迎~到~"
+				s is represented in unicode as: "\u6b22\u8fce~\u5230~"
+
+				To see the unicode back to the chinese chracter, pritnln(""\u6b22\u8fce~\u5230~"")
+
+		- CJKV characters may have no spaces
+			* to create spaces, simply "欢迎到".mkString(" ") ==> "欢 迎 到""
+
+		- to check if CJKV
+			val s = "欢迎~到~"
+			s.exists(Character.isIdeoGraphic(_))
+
+
+
+<-- Future
+	* Chaining Futures
+		import scala.concurrent.{Await, ExecutionContext, Future}
+		import ExecutionContext.Implicits.global
+		import scala.concurrent.duration._
+
+		Ex1: Via for yield loops
+			val f1 = Future { 2 }
+			val f2 = Future { 4 }
+			val f3 = for {
+				r1 <- f1
+				r2 <- f2
+			} yield r1 * r2
+			Await.result(f3, 2.seconds)
+
+		Ex2: Via maps
+			val f1 = Future { 3 }
+			def f2(x): 2 * x
+
+			f1.map{res => f2(res) }
+
+<-- Map vs FlatMap on { Option:[Some, None], Future]
+	- function definition:
+		 def map[S](f: T => S)
+		 def flatMap[S](f: T => Future|Option [S])
+
+	- map takes a function that transforms input of type T to output of type S
+	- flatMap takes a function that transforms input of type T and output a type S WRAPPED in Future|Option
+		Each element is wrapped
+
+		* Ex1: flatMap applied to Option
+			In the case of Option, wrapping Option(null) becomes none.  Since flatmap(f) = map(f).flatten, flatteing an element of None in a Seq removes it. BEAUTIFUL.
+			Seq( Option(null), Some(1) ).flatten -> List(1)
+
+		* Ex2: flatMap applied to Future
+			In the case of future, flatMap(f)
+				Future {
+					1
+				}.flatMap{ x =>
+					Future.successful(x + 1)
+				}
+
+			Here input function f takes an input Int and returns a Future{int}
+
+			flatMap takes Future{Future ..} and converts it to one Future{ }
+
+			Future{1}.map{x => x*2 } // returns Future[Int]
+
+			Future{1}.map{x => Future.successful(x*2) } // returns scala.concurrent.Future[scala.concurrent.Future[Int]]
+
+			Future{1}.flatMap{x => Future.successful(x*2) } // returns! scala.concurrent.Future[Int]			
+					Future.successful(x*2) represents a function that returns a Future, ie enrichToken in nimbus :)
+					def enrichTokens(maskTokens: Seq[String]): Future[Map[String, Double]]
+
+		* Ex3: What does flatten do?
+			Some(Some(1)).flatten --> Some(1)
+			Future(Future(1)).flatten --> Future(1)
+
+			
+// ------------------------------------------
+// Patterns:
+// ------------------------------------------
+<-- Case classes
+	* case classes comes with extra benefits
+		- comes with companion objects
+		- instantiation without new using companion object's apply method
+		- support pattern matching
+		- string serialization: .toString outputs the class name
+		- equality (==) operator is not by reference but by value
+
+
+<-- Class with Companion Objects
+	* Put in companion object
+		- factory method (ie apply)
+		- support classes used the class
+		- implicit used by the class
+
+	* Example
+		case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO {
+			//methods: business logic that operate on the states
+		}
+
+		object Ec2Resource {
+		  case class InstSpec(ec2InstanceId: String)
+
+		  implicit val instSpecWrites: Writes[InstSpec] = Json.writes[InstSpec]
+		  implicit val instSpecReads: Reads[InstSpec] = Json.reads[InstSpec]
+
+		  case class Spec(
+		    amiImageId: String,
+		    subnetId: String,
+		    instanceType: String,
+		    instanceProfile: String,
+		    tags: Option[Seq[AwsTag]],
+		    spotInstance: Boolean
+		  )
+
+		  implicit val specReads: Reads[Spec] = Json.reads[Spec]
+
+		  def apply(conf: ResourceIO.Conf): JsResult[Ec2Resource] = conf.resourceSpec
+		    .validate[Spec]
+		    .map { spec =>
+		      Ec2Resource.apply(s"${conf.workflowId}_rsc-${conf.resourceId}_${conf.instanceId}", spec)
+		    }
+
+		}
+
+		Use: Ec2Resource()
+
+<-- Object extend Traits
+	- Use the trait to store states; use object for factory method
+		* IMD: Traits are used to share interfaces(methods) and fields between classes. They are similar to Java 8's interfaces.
+
+	Ex1:
+		trait RetryDefaults {
+		  protected val defaultMaxRetries = 3
+		  protected val defaultPolicy: Policy = ExponentialBackoff(100, 10000)
+		}
+
+		object Retry extends RetryDefaults {
+		  
+		// Why no companion class? The apply method uses Try to instantiates; not need for a class
+		@annotation.tailrec
+		def apply[T](numTries: Int = defaultMaxRetries, policy: Policy = defaultPolicy)(
+			fn: => T
+			): Try[T] = {
+				Try { fn } match {
+				  case Failure(_) if numTries > 1 =>
+				    val delay = policy.retryDelay(defaultMaxRetries - numTries)
+				    Thread.sleep(delay)
+				    Retry(numTries - 1, policy)(fn)
+				  case fn => fn
+				}
+			}
+		}
+
+	Ex2:
+		trait ResourceIO {
+		  def create(): Either[Throwable, JsValue]
+		  def getStatus(instSpec: JsValue): Either[Throwable, Status.Value]
+		  def terminate(instSpec: JsValue): Either[Throwable, Status.Value]
+		}
+
+		object ResourceIO {
+		  case class Conf(
+		    workflowId: String,
+		    resourceId: String,
+		    instanceId: Int,
+		    resourceType: String,
+		    resourceSpec: JsValue
+		  )
+
+		  def apply(conf: Conf): JsResult[ResourceIO] = {
+		    val clz = Class
+		      .forName(s"com.salesforce.mce.orchard.io.${conf.resourceType}$$")
+
+		    clz
+		      .getDeclaredMethod("decode", classOf[Conf])
+		      .invoke(clz.getField("MODULE$").get(null), conf)
+		      .asInstanceOf[JsResult[ResourceIO]]
+		  }
+		}
+
+
+
+
+
+// ------------------------------------------
+// Useful Libraries
+// ------------------------------------------
+<-- Circe : Json Serialization/Deserialization Library optimized for speed
+	- https://circe.github.io/circe/
+
+	- Library converts 
+		* decoder/encoder
+			decoder: converts FROM json string TO case class
+			encoder: converts FROM case class to json string
+		* uses 
+			Cats: required dependency
+				Cats.show is an alternative to Java.toString
+
+			Shapeless: not required 
+
+	- vs play-json	
+		https://www.reddit.com/r/scala/comments/814lyh/why_do_people_love_circe/
+
+	- Base example
+		import io.circe._, io.circe.generic.semiauto._
+
+		object A {
+			case class UnmaskedToken(token: String, score: Double, sequence: String)
+			case class Unmasked(input: String, output: Seq[UnmaskedToken])
+
+			implicit val unmaskedDecoder: Decoder[Unmasked] = deriveDecoder[Unmasked]
+		}
+
+
+		Action.async {
+			import A.unmaskedDecoder
+			decode[Unmasked](response.body) 	//response.body is json string; response is Play response
+				.map{ unmasked: Unmasked =>  } 	//returns Either[Error, Future[Result]]
+				.toTry 
+				.get //Future[Result]
+		}
+
+		* On can also use Either match pattern
+		Action.async {
+			decode match { 
+				case Right(unmasekd) =>
+				case Left(_) => Future.successful(InternalServerError(Json.toJson(Seq("Failed to get response from hugmask.")))
+			}
+		}
+			but play already converts exceptions to 500 Interneral error
+
+		* Side: what does Action.async do?
+			Action.async { block: Future[Result] }: Action[AnyContent]
+
+			input: block returns Future[Result]
+			output: Action[AnyContent] plugs into Play handshake
+			
+
+<-- Shapeless : Generic programming library
+	- https://github.com/milessabin/shapeless
+
+	- https://jto.github.io/articles/getting-started-with-shapeless/
+		"Shapeless can be used to 
+			make the compiler work for you
+			scrape some boilerplate
+			gain a little extra typesafety
+		"
+
+	- Features
+		* A HList is a List where the type of every element is statically known at compile time. You may see them as "tuples on steroid"
+
+
+<-- Akka: Parallel programming using Actor models framework
+
+
+

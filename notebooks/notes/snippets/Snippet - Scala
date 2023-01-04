@@ -1,0 +1,129 @@
+
+
+
+// -----------------------------------------------------
+// Tail Recursion
+// -----------------------------------------------------
+	@tailrec
+    def helper(pmf: ProbabilityMassFunction, sortedLevels: Seq[Double], leftIndex: Int, rightIndex: Int, currentLevel: Double, intervals: Seq[ConfidenceInterval]): Seq[ConfidenceInterval] = {
+      if (sortedLevels.isEmpty) {
+        intervals
+      } else {
+        val interval = X(pmf.values(leftIndex), pmf.values(rightIndex), sortedLevels.head)
+        helper( pmf, sortedLevels.tail, leftIndex, rightIndex, currentLevel, interval +: intervals )
+	  }
+	
+
+// -----------------------------------------------------
+// Profile Time
+// -----------------------------------------------------
+	import java.util.concurrent.TimeUnit
+	object ProfileTime {
+	  def apply[S,T](scope: S, name: String)(
+	    f: => T
+	    val startTime = System.currentTimeMillis()
+	  ): (T, Long) = {
+	    val result = f
+	    val runTimeMinutes = TimeUnit.SECONDS.convert(System.currentTimeMillis() - startTime, TimeUnit.MILLISECONDS)
+	    (result, runTimeMinutes)
+	  }
+	}
+
+	val (result, timeMin) = ProfileTime("SCOPE", "NAME") {
+	    (1 to 100000000).foreach{i => i+2}
+	}
+
+
+
+// -----------------------------------------------------
+// Parse URI path into static and args
+// -----------------------------------------------------
+val path = "/localhost:9000/api/v1/dataset/instance"
+val STATIC_PATH_MARKERS = Seq("instance", "dataset", "lineage", "__metrics", "__status")
+def parsePath(path: String): (String, String) = {
+	val (staticPath, args) = path.split("/").foldLeft((List[String](), List[String]())) {
+		case ( (Nil, l2), token) => (List(token), l2)
+		case ( (h::t, l2), token ) => if (STATIC_PATH_MARKERS.contains(h)) (h::t, token::l2)
+			else (token::h::t, l2)
+	}
+	(staticPath.reverse.mkString("/"), args.reverse.mkString("/"))
+}
+val (staticPath, args) = parsePath(path)
+
+
+// -----------------------------------------------------
+// Regular Expression
+// -----------------------------------------------------
+	- raw is equivalent to """ """ but I can also do variable interpolation, ie s"$var1"
+	- \Q and \E denotes special character breaks, like {{, }}, /, //
+	- ( )+ means 1 or more matches
+
+	- Example: remove one or more ~
+		val dynamic = "{{dynamic}}"
+		val regx = raw"(\Q$dynamic\E)+".r
+		regx.replaceAllIn(is, "")
+
+
+
+// -----------------------------------------------------
+// Retrys
+// -----------------------------------------------------
+trait RetryDefaults {
+	val defaultMaxRetry = 3	
+	val policy = BackOffWithJitter()
+}
+
+object Retry extends RetryDefaults {
+  @annotation.tailrec
+  def apply[T](numTries: Int = defaultMaxRetry, policy: Policy = defaultPolicy)(
+    fn: => T
+  ): Try[T] = {
+    Try { fn } match {
+      case Failure(_) if numTries > 1 =>
+        val delay = policy.retryDelay(defaultMaxRetry - numTries)
+        Thread.sleep(delay)
+        Retry3(numTries - 1, policy)(fn)
+      case fn => fn
+    }
+  }
+
+}
+
+
+// -----------------------------------------------------
+// Jva Time
+// -----------------------------------------------------
+import java.time.{Duration, Period, LocalDateTime}
+import java.time.format.DateTimeFormatter
+
+val TTL_SECONDS = 60*60*24*7 // 7 days
+
+def getDeleteTimeStamp(secondsBack:Int = TTL_SECONDS): String = {
+	LocalDateTime.now()
+		.minus(Duration.ofSeconds(secondsBack))
+		.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSS"))
+}
+getDeleteTimeStamp(TTL_SECONDS)
+
+def bShouldClean(updateTimeStr: String= "2022-07-21 10:11:53.48866"): Boolean = {
+	val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSS")
+	val lastUpdate = LocalDateTime.parse(updateTimeStr, formatter);
+	Duration.between(lastUpdate, now).toSeconds > TTL_SECONDS
+}
+bShouldClean()
+
+
+- convert between ms <--> LocaldateTime
+import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
+
+def getZone(): ZoneOffset = {
+		ZoneId.systemDefault().getRules().getOffset(LocalDateTime.now())
+	}
+
+val dateTime1 = LocalDateTime.now() //2022-08-25T13:51:40.968666
+val milliSec1 = dateTime1.atZone(getZone).toInstant.toEpochMilli
+
+
+val dateTime2b = LocalDateTime.ofInstant(Instant.ofEpochMilli(milliSec1), getZone)

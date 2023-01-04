@@ -1,0 +1,135 @@
+
+
+// ---------------------------------------------
+// SparkNLP
+// ---------------------------------------------
+	import $ivy.`com.johnsnowlabs.nlp::spark-nlp:3.2.0`
+
+	import org.apache.spark.ml.Pipeline
+	import com.johnsnowlabs.nlp.DocumentAssembler
+	import com.johnsnowlabs.nlp.annotator.{Tokenizer, Stemmer, StopWordsCleaner, Normalizer}
+	import com.johnsnowlabs.nlp.Finisher
+
+	def preprocessText(df: DataFrame, inputCol: String, outputCol: String): DataFrame = {
+	    val assembler = new DocumentAssembler()
+	        .setInputCol(inputCol)
+	        .setOutputCol("document")
+
+	    val tokenizer = new Tokenizer()
+	        .setInputCols("document")
+	        .setOutputCol("tokens")
+
+	    val stopWordCleaner = new StopWordsCleaner()
+	        .setInputCols("tokens")
+	        .setOutputCol("stop")
+	        .setCaseSensitive(false)
+
+	    val stemmer =  new Stemmer()
+	        .setInputCols("stop")
+	        .setOutputCol("stems")
+
+	    val normalizer = new Normalizer()
+	        .setInputCols("stems")
+	        .setOutputCol("normalized")
+	        .setLowercase(true)
+	        .setCleanupPatterns(Array("""[^\w\d\s]""")) // remove punctuations (keep alphanumeric chars)
+
+	    //Finisher outputs annotation(s) values into String.
+	    val finisher = new Finisher()
+	        .setInputCols("normalized")
+	        .setOutputCols(outputCol)
+	        .setOutputAsArray(true)
+
+	    val pipeline = new Pipeline()
+	        .setStages(Array(assembler, tokenizer, stopWordCleaner, stemmer, normalizer, finisher))
+	        .fit(df)
+
+	    pipeline.transform(df)
+	}
+
+	val data = Seq("Spark NLP is an open-source text processing library.").toDF("text")
+
+	val dfPreprocessed = preprocessText(data, "text", "preprocessed")
+
+	dfPreprocessed.show(false)
+
+
+
+
+// ---------------------------------------------
+// Calculate Entropy
+// ---------------------------------------------
+	val globalEngagementRatioQuantile = dfMetricsWithMembership.stat.approxQuantile("eScore", Array(0.20, 0.40, 0.60, 0.80), 0.001)
+
+	val dfEntropy = dfMetricsWithMembership
+	    .filter(col("deliveries") > 0)
+	    .rdd 
+	    .map{ r: Row =>
+	        val eScore = r.getAs[Double]("eScore")
+	        val label = globalEngagementRatioQuantile
+	            .search(eScore)
+	            .toString
+	            .replaceAll("InsertionPoint", "class")
+
+	        (r.getAs[String]("subject"), label)
+	    }
+	    .aggregateByKey(Seq.empty[String]) (
+	        (seq: Seq[String], s: String) => s +: seq, 
+	        (seqA: Seq[String], seqB: Seq[String]) => seqA ++ seqB
+	    )
+	    .flatMap{ case(freqPattWithDynamic, labels) =>     
+	        if (labels.size == 0)
+	            None
+	        else {
+	            val labelToCntMap = labels.groupBy(identity).mapValues(vs => vs.size)
+	            val N = labelToCntMap.values.sum
+	            val entropy = labelToCntMap.map{ case (k, n) => - (n.toDouble/N)*(math.log(n.toDouble/N)) }.sum        
+	            Some(freqPattWithDynamic, entropy)
+	        }
+	    }
+
+	val entropy: Array[Double] = dfEntropy.collect.map(_._2)
+
+	val avgEntropy = entropy.sum / entropy.size
+
+
+// ---------------------------------------------
+// Handling Invalid Data At Scale
+// ---------------------------------------------
+def safe[S, T](f: S => T): S => Either[T, (S, Exception) ] = {
+	new Function[S, Either[T, (S, Exception)]] with Serializable {
+		def apply(s: S): Either[T, (S, Exception)] = {
+			try {
+				Left(f(s))
+			} catch {
+				case e: Exception => Right( (s, e) )
+			}
+		}
+	}
+}
+
+import org.apache.spark.sql.Row
+val rawDF = Seq ("Hi, Tom, Chang", "Bye, Bye, Bite", "").toDF()
+
+def parse(row: Row): (String, Int) = {
+	val line = row.getAs[String](0)
+	val fields = line.split(",")
+	val v1 = fields(0)
+	val v2 = fields.size // could also use coluumn name instead of index if input was DataFrame
+
+	if (fields.size <2) row.getAs[Double](0)
+	(v1, v2)
+}
+
+
+val df1 = rawDF.map(safe(parse))
+
+//print the valid
+df1.filter(_.isLeft).count
+df1.filter(_.isLeft).show
+
+df1.filter(_.isRight).count
+df1.filter(_.isRight).show
+df1.filter(_.isRight).map(_.right.get).show
+
+

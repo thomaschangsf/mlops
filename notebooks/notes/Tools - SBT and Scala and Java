@@ -1,0 +1,514 @@
+// --------------------------------------------------------------------
+// X-References
+// --------------------------------------------------------------------
+- Tools - Play
+- Tools - scala
+
+
+// --------------------------------------------------------------------
+// SBT
+// --------------------------------------------------------------------
+- Special Directories and Files
+	* ~/.ivy2
+
+	* ~/.ivy2/.credentials 	: store password to repos like jfrog
+
+	* ~/.sbt/repositories	: specifies remote repos for binaries
+
+- multiple projects
+	* to switch to one sub project 
+		- option1: from sbt terminal
+			sbt 'project tasks'		
+
+		- option2: outside of projects
+			sbt 'project tasks' compile
+			sbt 'project tasks' assembly
+			
+			or sbt ";project tasks;runMain [FULL PATH]/EMRSparkOnceAtActivationPipeline
+
+- run vs runMain	
+	SBT can be used to run any object class main method
+	 	sbt runMain package.objectname
+
+
+	 Example:
+	 	in package com.salesforce.mce.lalaland, I define this object
+
+		object TomServer {
+
+		  def main(args: Array[String]): Unit = {
+		    print("hi Tom")
+		  }
+		}
+
+
+		Then in sbt, I can type "sbt runMain com.salesforce.mce.lalaland.TomServer"
+
+- sbt
+	compile
+	package --> create local jar
+	assembly --> create uber jar
+
+
+- plugins
+	featuers/actions that is added during your sbt lifecycle (compile, package)
+
+
+- library
+		
+- Dependency Trees
+	* Understand what you are pulling in
+		Look at mvn repo to 
+			see what your library depend on
+			recreate the pom.xml
+
+	* Setup
+		addSbtPlugin("net.virtual-void" % "sbt-dependency-graph" % "0.10.0-RC1")
+		sbt depdendencyTree
+		sbt DependencyBrowserGraph
+
+- Package vs Assembly
+	package only store files you wrote in your current library
+
+- Creating Uber Jars Via SBT Assembly
+	* Setup
+		addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "1.1.0")
+		sbt assembly
+
+	* Reference
+		https://github.com/sbt/sbt-assembly#excluding-jars-and-files
+
+	* Watch out depedency hell; mvn will gladly downgrade
+		Hints:
+			- Use sbt dependencyTree to see what's pulled into uber jar, and reduce the number
+			- library
+				use transitive, which means do not pull the library's dependencies
+					ex: ("org.apache.maven.plugins" % "maven-enforcer-plugin" % "3.0.0" intransitive() )
+
+					Transitive dependencies are shown in the 2nd and lower layer of your dependnecy graph
+						mvn's provided scope specifies the library's trainsitive depedenncies should be provided by the jdk or environment
+						See mvn's 6 types of dependency scope: https://www.baeldung.com/maven-dependency-scopes
+
+					Library with Intransitive means we are still pulling in source files defined in the library. IE GrpcClientSettings in akka-grpc-runtime.
+
+				exclude the library's jars 
+					ex: ("com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "2.1.4") 
+				        .exclude("com.thesamet.scalapb", "scalapb-runtime")
+
+				used provided 
+					provided means the running environment (ie spark) will have the libraries so don't include it
+					ex: "ch.megard" % "akka-http-cors_2.12" % "1.1.3" % "provided"
+
+			- assemblyMergeStrategy
+				ex: 
+					assembly / assemblyMergeStrategy := {
+				      case PathList("aether", xs @ _*)         => MergeStrategy.first
+				      case PathList("META-INF", xs @ _*) => MergeStrategy.discard
+				      case "reference.conf" => MergeStrategy.concat 
+				      case _ => MergeStrategy.deduplicate 
+				      //case _ => MergeStrategy.first
+				    }
+
+			- exclueJar to reduce size of uber jar
+				assembly / assemblyExcludedJars := {
+			      val cp = (assembly / fullClasspath).value
+			      cp filter {_.data.getName == "compile-0.1.0.jar"}
+			    }
+	* Shading
+		shading is a feature in the assembly plugin which allows one to rename a package. Unlike mergeStrategy, transitive, the files are still added to the jar but put in a different path.
+
+- Resolvers + Credentials + special directories
+	* In ~/.sbt contains default setups
+
+	* I currently have ~/.sbt/1.0/mce-bootstrap.sbt which pulls in credentials + define resolvers. This file is triggered EVERYTIME I enter an sbt command
+
+		def environmentCredentials(realm: String="Artifactory Realm", envPrefix: String="ARTIFACTORY") = {
+		  println(s"TWC: Run ~/.sbt/1.0/mce-bootstrap.sbt: environmentCredentials: $realm: $envPrefix ")
+		  val envVals = Seq("HOST", "USER", "PASSWORD").flatMap { v => sys.env.get(s"${envPrefix}_$v") }.filterNot { _.isEmpty }
+		  if (envVals.length < 3) {
+		    None
+		  } else {
+		    Some(Credentials(realm, envVals(0), envVals(1), envVals(2)))
+		  }
+		}
+
+		def fileCredentials(file: File) = {
+		  println(s"TWC: Run ~/.sbt/1.0/mce-bootstrap.sbt: fileCredentials: ${file.toString} ")
+		  if (file.exists()) {
+		    Some(Credentials(file))
+		  } else {
+		    None
+		  }
+		}
+
+		resolvers ++= Seq(
+		  "Krux Maven" at "https://kruxmvn.jfrog.io/kruxmvn/libs-releases",
+		  //Resolver.url("sbt-releases-local",url("https://kruxmvn.jfrog.io/kruxmvn/sbt-releases-local")),
+		  //Resolver.url("ivy-releases-local",url("https://kruxmvn.jfrog.io/kruxmvn/ivy-releases-local"))(Resolver.ivyStylePatterns),
+		  Resolver.sonatypeRepo("releases"),
+		  Resolver.defaultLocal,
+		)
+
+		credentials ++= Seq(
+		  fileCredentials(Path.userHome / ".ivy2" / ".credentials"),  // for kruxmvn.jfrog.io
+		  fileCredentials(Path.userHome / ".sbt" / ".credentials"),   // for nexus.soma.salesforce.com
+		  environmentCredentials(envPrefix="JFROG")
+		).flatten
+
+	* IN build.sbt, you may also need to provide the resolvers
+		resolvers ++= Seq(
+	      Resolver.defaultLocal,
+	      Resolver.sonatypeRepo("releases"),
+	      Resolver.sonatypeRepo("public")
+	    ),
+
+- Pulling From Nexus
+	* Option1:
+		~/.sbt/.credentials 	: store password to repos like jfrog
+		 ~/.sbt/repositories	: specifies remote repos for binaries
+
+	* Option2: (defined in build.sbt)
+		lazy val commonSettings = Seq(
+		  scalacOptions ++= Seq("-deprecation", "-feature", "-Xlint"), // , "-Xfatal-warnings"),
+		  scalaVersion := "2.12.15",
+		  libraryDependencies += scalaTestArtifact,
+		  fork := true,
+		  organization := "com.salesforce.mce",
+		  resolvers += "nexus" at "https://nexus.soma.salesforce.com/nexus/content/repositories/releases/",
+		  credentials += Credentials(
+		    "Sonatype Nexus Repository Manager",
+		    "nexus.soma.salesforce.com",
+		    sys.env("NEXUS_SOMA_USERNAME"),
+		    sys.env("NEXUS_SOMA_PASSWORD")
+		  ),
+		  assembly / test := {}  // skip test during assembly
+		)
+
+- Giter: Create a sample scala project using  Coursier g8
+	g8 git@git.soma.salesforce.com:mc-einstein/scala-seed.g8.git
+
+	Coursier is a faster version of ivy ?
+
+
+// --------------------------------------------------------------------
+// IntelliJ Debugger Via SBT Shell
+// --------------------------------------------------------------------
+Latest
+	IntelliJ --> Edit Configuration --> Remote Debugger --> port 5005
+
+	terminal: sbt -jvm-debug 5005 -Dconfig.resource=application.local.conf -Dlogger.resource=logback-local.xml app/run
+
+
+
+Debug via sbt shell in intellij
+	https://www.jetbrains.com/help/idea/run-debug-and-test-scala.html#sbt_shell_debug
+
+	Sbt settings --> SBT Settings --> enable debugging
+
+	build.sbt
+		fork has to be false
+
+	Define scala class in package 
+		project/code: /Users/thomaschang/Documents/dev/git/tutorial/intellij-basic
+
+		package com.salesforce.mce.lalaland
+		class Thermometer {
+		  def fahrenheit(): Float = {
+		    print("TOM")
+		    1
+		  }
+		}
+
+		object Thermometer {
+		  def main(args: Array[String]): Unit = {
+		    val t = new Thermometer()
+		    t.fahrenheit()
+		    print("DONE")
+		  }
+		}
+
+	Sbt shell 
+		Initialize sbt shell on lower intellij terminal
+
+		click bug icon. This will create a new remove JVM debug session called "Debug sbt shell" with random ports , which is ok
+
+		runMain [PACKAGE].[OBJJECT]
+			runMain com.salesforce.mce.lalaland.Thermometer
+
+
+// --------------------------------------------------------------------
+// Formatting
+// --------------------------------------------------------------------
+- projects can have files like .scalafmt.conf
+	version = 3.5.8
+
+	runner.dialect = "scala213source3"
+
+	// Line Length
+	maxColumn = 100 // Line length 100 characters, please note that long string won't be broken up into new lines
+
+	// 2 spaces indent for function param definitions
+	indent.defnSite = 2
+
+	docstrings.style = Asterisk
+	docstrings.wrap = no
+
+	// No need to always do new lines after message definitions
+	newlines.beforeMultilineDef = keep
+
+	// No align on case matches
+	align.preset = none
+
+	rewrite.rules = [SortImports]
+
+	binPack.parentConstructors = Always
+
+	project.excludeFilters = [".*\\.sbt$"]
+
+- Option1: Enable from intelleij, so everytime you save, it autoformats
+	https://github.com/scalameta/scalafmt/blob/master/docs/installation.md#format-on-save
+
+	Prefereces -> Editor --> Scala
+		schema: project
+		formatter: scalafmt
+		Check: Reformat on file save
+		Configuration: .scalafmt.conf
+
+- Option2: 
+	In project/plugins.sbt add
+		addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.4.6")
+
+	Task keys:
+		myproject/scalafmt: Format main sources of myproject project
+		myproject/test:scalafmt: Format test sources of myproject project
+		scalafmtCheck: Check if the scala sources under the project have been formatted.
+		scalafmtSbt: Format *.sbt and project/*.scala files.
+		scalafmtSbtCheck: Check if the files have been formatted by scalafmtSbt.
+		scalafmtOnly <file>...: Format specified files listed.
+		scalafmtAll or scalafmtCheckAll: Execute the scalafmt or scalafmtCheck task for all configurations in which it is enabled (since v2.0.0-RC5)
+
+
+// --------------------------------------------------------------------
+// Included library order
+// --------------------------------------------------------------------
+	import java.*
+	import javax.*
+	__blank line__
+	import scala.*
+	__blank line__
+	import other open source (ie aws)
+	__blank ine__
+	import com.krux.*
+	import com.salesforce.*
+	import internal.packages.
+
+
+// --------------------------------------------------------------------
+// Supporting Multiple versions of Java
+// --------------------------------------------------------------------
+- Using sdkman (SDK mananager)
+	#  SDKMan runs indepedently of /usr/libexec/java_home 
+	#    It is like brew, and can be used to install multiple version 
+	#    It saves its version in ~/.sdkman/canddiates
+
+	#    uses /usr/libexec/java_home
+	#      checkcacersts
+	#      javaVersionsAvailableOnMac
+
+	#  sdkInit
+	#    test: sdk version
+
+	#  Onetimes etup
+	#    sdk install java 11.0.14-zulu
+	#    sdk install sbt
+
+	#  Set java to a certain version 
+	#    sdk list java 
+	#       to see all other versions of java
+	#    sdk default java 11.0.14-zulu
+
+	#  check current version
+	#    sdk current java
+	#    or java -version
+
+	#  where's the java content home | cacerts?
+	#    ls -al ~/.sdkman/candidates/java/
+	#    Point to this in Eclipse
+
+	#  Add CA Certs
+	#    Refer to tool | CDP - environmentsetup in scratchup for more details
+
+	#    sudo keytool -import -trustcacerts -alias salesforce_internal_root_ca_1 -file ~/Desktop/tmp/Salesforce_Internal_Root_CA_1.pem -keystore /Users/thomaschang/.sdkman/candidates/java/11.0.14-zulu/zulu-11.jdk/Contents/Home/lib/security/cacerts
+	#    sudo keytool -import -trustcacerts -alias salesforce_internal_root_ca_3 -file ~/Desktop/tmp/Salesforce_Internal_Root_CA_3.pem -keystore /Users/thomaschang/.sdkman/candidates/java/11.0.14-zulu/zulu-11.jdk/Contents/Home/lib/security/cacerts
+
+	#  Add to eclipse
+	#    Refer to https://www.baeldung.com/java-sdkman-intro
+
+	  
+
+
+
+- Using JENV Reference:
+	https://chamikakasun.medium.com/how-to-manage-multiple-java-version-in-macos-e5421345f6d0
+
+
+
+export PATH="$HOME/.jenv/bin:$PATH"
+eval "$(jenv init -)"
+jenv enable-plugin export
+jenv enable-plugin maven
+
+jenv doctor
+
+brew install AdoptOpenJDK/openjdk/adoptopenjdk{11,8}
+
+list available JAVA version
+	/usr/libexec/java_home -V
+
+Add java to jenv [DO NOT USE JENV]
+	jenv add /Library/Java/JavaVirtualMachines/jdk-17.0.2.jdk/Contents/Home
+  	jenv add /Library/Java/JavaVirtualMachines/adoptopenjdk-11.jdk/Contents/Home
+  	jenv add  /Library/Java/JavaVirtualMachines/adoptopenjdk-8.jdk/Contents/Home
+
+javaSetSdk11
+	jenv versions
+	jenv global openjdk64-11.0.11, openjdk64-1.8.0.292, oracle64-17.0.2
+	jenv local 11
+	restart
+
+
+See all moethod of jar
+	javap -cp [JAR] package
+		javap -cp ./target/scala-2.12/mce-akkagrcp-runtime-v2-assembly-0.0.1-SNAPSHOT.jar com.google.common.base.Preconditions
+
+		javap -cp  ./target/scala-2.12/mce-akkagrcp-runtime-v2-assembly-0.0.1-SNAPSHOT.jar com.salesforce.mce.mceakkagrcpruntimev2.HelloWorld
+
+
+
+See all classes
+	jar tvf [JAR]
+
+
+Folder path is not the same as package. Package trumps.
+	Ex: Tom.scala
+		folder: src.main.scala.Tom
+		package: com.salesforce.mce.mceakkagrcpruntimev2
+
+		When I run the javap command, it uses the package and not the folder path
+
+
+// --------------------------------------------------------------------
+// Scala Plugins: format, package, assembly
+// --------------------------------------------------------------------
+# Assumes project/plugins.sbt has:
+# addSbtPlugin("net.virtual-void" % "sbt-dependency-graph" % "0.9.2")
+  
+sbt scalafmtCheck               // check all .scala files
+sbt scalafmtSbtCheck            // check all .sbt files
+
+sbt scalafmtAll                   // format all .scala files
+sbt "scalafmtOnly path_to_file"   // format specific .scala files
+sbt scalafmtSbt                   // format all .sbt and .scala files   
+
+sbt dependencyTree                // assumes addSbtPlugin("net.virtual-void" % "sbt-dependency-graph" % "0.10.0-RC1")
+
+sbt dependencyBrowseGraph
+
+sbt assembly 					// fat jar; assumes
+sbt package
+
+
+// --------------------------------------------------------------------
+// SBT Cross Builds: 
+//		buildng with multiple scala versions
+// --------------------------------------------------------------------
+- sbt command to cross deploy command?
+	https://www.scala-sbt.org/0.12.4/docs/Detailed-Topics/Cross-Build.html
+
+	sbt + package
+		creates target/2.X
+		 
+	abt + publish
+
+- SDIE: % vs %%
+	unlike java, scala code is not compatible across different scala versions
+
+	%% --> let compiler figure the the version
+	%  --> we specify a hard version
+
+	Use % for java dependencies !!!
+
+	https://www.baeldung.com/scala/percent-symbols-build-sbt
+
+	Ex:
+		* I decide what scala version I want
+			libraryDependencies += "com.typesafe.akka" % "akka-actor_2.12" % "2.6.5"
+			<group> % <artifact> %version
+
+		* Let sbt decide
+			libraryDependencies += "com.typesafe.akka" %% "akka-actor" % "2.6.5"
+
+		* java dependencies always uses %
+			libraryDependencies += "joda-time" % "joda-time" % "2.10.6"
+
+
+
+// --------------------------------------------------------------------
+// Process to have  docker image to point where resolveers + SBT version
+// --------------------------------------------------------------------
+- Based on https://git.infra.igodigital.com/mce/scala-sbt, which is based on https://github.com/hseeberger/scala-sbt 
+	* Docker image assumes credential stored in ~/.ivy2/.credentials
+
+- folders
+	* dev
+		- Dockerfile
+			FROM azul/zulu-openjdk-alpine:8
+			RUN \
+			    apk add --no-cache bash curl && \
+			    curl -Ls https://git.io/sbt > /bin/sbt && chmod 0755 /bin/sbt
+			COPY mcek-bootstrap.sbt /root/.sbt/1.0/mcek-bootstrap.sbt
+
+		mcek-bootstrap.bat (resolve order + credentials)
+			def environmentCredentials(realm: String="Artifactory Realm", envPrefix: String="ARTIFACTORY") = {
+				  val envVals = Seq("HOST", "USER", "PASSWORD").flatMap { v => sys.env.get(s"${envPrefix}_$v") }.filterNot { _.isEmpty }
+				  if (envVals.length < 3) {
+				    None
+				  } else {
+				    Some(Credentials(realm, envVals(0), envVals(1), envVals(2)))
+				  }
+				}
+
+				def fileCredentials(file: File) = {
+				  if (file.exists()) {
+				    Some(Credentials(file))
+				  } else {
+				    None
+				  }
+				}
+
+				resolvers ++= Seq(
+				  "Krux Maven" at "https://kruxmvn.jfrog.io/kruxmvn/libs-releases",
+				  Resolver.url("sbt-releases-local",url("https://kruxmvn.jfrog.io/kruxmvn/sbt-releases-local")),
+				  Resolver.url("ivy-releases-local",url("https://kruxmvn.jfrog.io/kruxmvn/ivy-releases-local"))(Resolver.ivyStylePatterns),
+				  Resolver.sonatypeRepo("releases")
+				)
+
+				credentials ++= Seq(
+				  fileCredentials(Path.userHome / ".ivy2" / ".credentials"),
+				  fileCredentials(Path.userHome / ".ivy2" / ".credentials.dmp"),
+				  fileCredentials(Path.userHome / ".ivy2" / ".credentials.mce"),
+				  environmentCredentials(envPrefix="JFROG"),
+				  environmentCredentials(envPrefix="DMP_ARTIFACTORY")
+				).flatten
+
+
+
+	* open-jdk
+		Dockerfile
+		repositories
+		sbtbootstrap.sbt
+
+
+- cd dev && docker build -t scala-sbt-dev .
+
+

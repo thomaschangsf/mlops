@@ -1,0 +1,251 @@
+// ------------------------------
+// Background
+// ------------------------------
+* Exercise files are stored on mac: /Users/chang/Documents/dev/git/coding/kubernetes_linkedin/Exercise Files
+
+
+
+// ------------------------------
+// Containerzation with Kubernetes
+// ------------------------------
+<-- Kubernetes Features
+
+<-- Other Implementations
+
+
+// ------------------------------
+// Kubernetes: The Terminology
+// ------------------------------
+<-- Architecture of a Kubernets Cluster
+	--> kubectl: client cli
+		 has kubeconfig file: 
+		 	contains server information
+		 	authentication server to access api server 
+
+	--> Master node
+		* API Server: 
+			enables user to interact with the API
+			communicates with etcd, which is a distributed key value store (liek redis); etcd resides outside of master node.
+				etcd is the db; stores info like job scheduling, state information
+
+		* Scheduler
+			Watches pods created pods which has no ? and assign pod to a cluster
+
+		* Controller Manager
+			Supervises back tasks/threads
+			Other roles: 
+				node controller: responsible for worker state
+				replication controller: respsonsible replication state has the right number of pods
+				endpoint controller: joins pods to services
+
+
+	--> Worker Node
+		kubelet
+			communicates with the master node: api server
+
+		Docker
+			pod: smallest unit that can be deployed
+				multiple containers 
+					thse containers share storage, ip address, linux namespace
+
+		kube-proxy
+			process is the network proxy and network load balancer
+
+
+
+<-- Basic Building Blocks: Nodes and pods
+	--> Node
+		* can be a physical machine or virtual machine
+		* each node has 
+			kueblet
+			docker
+			kuebl proxy
+			supervisord
+		* recommended to have at least 3 nodes
+
+	--> Pod
+		Pod is simplest unit; represetn 1 running process
+		Pod contains
+			docker application container
+			storage resouce 
+			ip
+			options how the container should run
+
+<-- Deployments, jobs, and services	
+	--> Benefits of Controllers
+		Application Reliability
+		Scaling
+		Load balancing
+
+	--> Kinds of Controllers (refers to Controller Managers)
+		ReplicatSet: ensures specifies pods is actually there
+			Depreates: Replicatoin Controller
+
+		Deploymetns: provides declarative updates for pods and replicasets
+			replicaset is controlled by the deployments
+
+			deployment is described in a yaml files
+
+			deployment controls the replicaset, which contorls the pods
+
+			Solves the use cases:
+				scaling replica set
+				pause and resume a deployment; related to rollout?
+				Get status 
+
+		Daemon Sets
+			 Ensure all nodes run a copy of a specific pod; 
+			 	perhaps for systems related capability, like log aggregator
+
+		Jobs
+			Supervisor process for pods carrying a batch job; when job is done the pods are terminated
+			Use cases: cron jobs
+
+		Services
+			Provide network connectivy to one or more pod
+				givs up unique ip
+
+			allows communication between one set of deployment with another
+				pod@DeployA --> service --> pod@DeployB
+
+			in relation 
+
+
+	
+
+<-- Labels, selectors, and namespaces: annotate and organize
+	--> Labels
+		key value pair attached to pods
+		ex: release: stable, environment: dev
+
+	--> selectors
+		enables one to select k8 resources based on labesl
+
+		2 types
+			equality based
+			set based
+
+	--> Namespace
+		Allows one to have multiple virtual clusters backed by the same physical cluster
+
+		Allows teams to access resources with accountability
+			objects are placed in "default" namespace at start
+
+
+<-- Kubelet and kube proxy
+	--> Kubelet
+		Each node has a kubelete
+
+		roles:
+			communicates with api server to see if pod has been assigned a node
+
+			executes pod containers via a container engine
+
+			mounts and runs pod volumes and secrets
+
+			executes health checks to identify pod/node status
+
+
+		kubelete takes the pod yaml portion and ensures what is specified is carried out. kubelet only manages containers creaated by the API server. There may be other pods running on node.
+
+	--> kube-proxy: The network proxy
+		Is a process that runs on a node
+
+		Reflects the services (?) and can do round rovin forwarding across a set of backends. Here's the detail
+			servics are defined against the API server
+
+			kube-proxy listens to API server for addition/removal of services
+
+			for each new service, kube-proxy opens a random port X123 on local node
+
+			connection to the node's port X123 is channeled to the backed pods. 
+				Side: backend refers to a set of pods
+
+
+		Operates in 3 modes
+			user space mode: (Most common)
+
+			ip tables mode
+
+			
+
+
+
+
+// ------------------------------
+// Kubernetes 101: Hello World
+// ------------------------------
+<-- Mac Install
+	-->
+
+
+<-- Other Options
+
+<-- Running first Hello World
+
+<-- Breaking down the Application
+
+
+
+
+
+// ------------------------------
+// Making it Production Ready
+// ------------------------------
+<-- Add, change, and delete labels
+	-->
+
+
+<-- Working with labels
+	-->
+
+
+<-- Application health check
+	-->
+
+<-- Handling application upgrades
+	-->
+
+
+<-- Basic Trouble Shooting Techniques
+	-->
+
+
+
+// ------------------------------
+// Kubernetes 201
+// ------------------------------
+<-- Running a more complicated example
+	-->
+
+
+<-- Kubernetes Dashboard
+	-->
+
+<-- Dealing with confiugration data
+	-->
+
+<-- Dealing with application secrets
+	-->
+
+<-- Running Jobs in Kubernetes
+	-->
+
+<-- Running Statful sets
+	-->
+
+
+
+
+// ------------------------------
+// Advanced Topics
+// ------------------------------
+<-- Production Kubernetes Deployments
+
+<-- Detailed Look at Namespace
+
+<-- Monitoring and Logging
+
+<-- Authentication and Authorization
+
+

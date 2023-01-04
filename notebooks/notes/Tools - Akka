@@ -1,0 +1,128 @@
+// -------------------------------------------------
+// Theory
+// -------------------------------------------------
+- Akka framework (actor model) enables robust concurrent scalable software to handle parallel processing in a high performance network:
+	* Multi-threaded behavior without the use of low-level concurrency constructs like atomics or locks — relieving you from even thinking about memory visibility issues.
+
+	* Transparent remote communication between systems and their components — relieving you from writing and maintaining difficult networking code.
+
+
+	* A clustered, high-availability architecture that is elastic, scales in or out, on demand — enabling you to deliver a truly reactive system.
+
+- Deficiencies of current OOP approach
+	* Encapsulation and call stack Challenge
+		- To achieve any meaningful concurrency and performance on current systems, threads must delegate tasks among each other in an efficient way without blocking. With this style of task-delegating concurrency (and even more so with networked/distributed computing) call stack-based error handling breaks down and new, explicit error signaling mechanisms need to be introduced. Failures become part of the domain model.
+
+		- Concurrent systems with work delegation need to handle service faults and have principled means to recover from them. Clients of such services need to be aware that tasks/messages might get lost during restarts. Even if loss does not happen, a response might be delayed arbitrarily due to previously enqueued tasks (a long queue), delays caused by garbage collection, etc. In face of these, concurrent systems should handle response deadlines in the form of timeouts, just like networked/distributed systems.
+
+	* Shared memory
+		how do 2 threads on 2 cores share same access the same variable? writes in core1's cahce is not visiable to core2's cache.
+
+		sol1: volatile marker
+
+		sol2: locked section
+
+		either approach slows down computation and requires deep programming knowledge. 
+
+- Akka's solution
+	* Actors encapsulate not only their state but their execution. Communication with actors is not via method calls but by passing messages. 
+
+	* Actor model abstraction allows one to think about state|message communication which
+
+		- Avoid locking and blocking
+
+		- Simplifies error handling since we don't share a call stack between actors; each actor handle 2 types of erros
+			* Target actor: task sent is invalid
+			* Target actor: internal fault (ie 500)
+
+		- Supervised stratigy is defined by parent actor which controls whether|how to handle child actors in bad states
+
+	* While there are multiple Akka modules, the main one is akka-actor-typed
+
+
+// -------------------------------------------------
+// Code 1: Hello World
+// -------------------------------------------------
+- cdg && cd tutorial/akka/akka-quickstart-scala
+
+- IntelliJ : Disable autoimport for scaladsl
+	https://doc.akka.io/docs/akka/2.6/additional/ide.html
+
+- sbt run
+	There are 2 ways to start a preojct
+		* Method1: have a main method inside an object
+			sbt run ]com....path-to-main] 
+
+		* Method2: object extends App
+			- Snippet
+				object AkkaQuickstart extends App {
+				 	// Create actor sysatem
+				  	val greeterMain: ActorSystem[GreeterMain.SayHello] = ActorSystem(GreeterMain(), "AkkaQuickStart")
+				  
+				  	// Send message
+				  	greeterMain ! SayHello("Charles")
+				}
+
+
+// -------------------------------------------------
+// Code 2: Temperature Sensors
+//	https://doc.akka.io/docs/akka/2.6/typed/guide/tutorial_1.html
+// -------------------------------------------------
+- Git: /Users/thomaschang/Documents/dev/git/tutorial/akka/akka-quickstart-scala
+
+- Code
+	import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
+	import akka.actor.typed.{ActorRef, Behavior, PostStop, Signal}
+
+	object Device {
+	  // Factory method
+	  def apply(groupId: String, deviceId: String): Behavior[Command] = {
+	    // setup is called when actor is started
+	    // The class instantiated inside setup needs to extends from AbstractBehavior
+	    Behaviors.setup(context => new Device(context, groupId, deviceId))
+	  }
+
+	  // Command trait messages the Device actor responds to
+	  // ActorRef is the actorA calling this Device actor. ActorRef takes a return type which actorA expects to receive.
+	  // The calling actor can also be a testProbe; see test code.
+	  sealed trait Command
+
+	  final case class ReadTemperature(requestId: Long, replyTo: ActorRef[RespondTemperature]) extends Command
+	  // Represent return message
+	  final case class  RespondTemperature(requestId: Long, value: Option[Double])
+
+	  final case class RecordTemperature(requestId: Long, value: Double, replyTo: ActorRef[TemperatureRecorded])
+	    extends Command
+	  final case class TemperatureRecorded(requestId: Long)
+	}
+
+	class Device(context: ActorContext[Device.Command], groupId: String, deviceId: String)
+	  extends AbstractBehavior[Device.Command](context) {
+	    import Device._  // import the classes in the Device Object
+
+	  var lastTemperatureReading: Option[Double] = None
+
+	  context.log.info("Device actor {}-{} started", groupId, deviceId)
+
+	  // Messages are passed between actors
+	  override def onMessage(msg: Command): Behavior[Command] = {
+	    msg match {
+	      case RecordTemperature(id, value, replyTo) =>
+	        context.log.info("Recorded temperature reading {} with {}", value, id)
+	        lastTemperatureReading = Some(value)
+	        replyTo ! TemperatureRecorded(id)
+	        this
+
+	      case ReadTemperature(id, replyTo) =>
+	        replyTo ! RespondTemperature(id, lastTemperatureReading)
+	        this
+	    }
+	  }
+
+	  // Signals are passed between parent and child actors
+	  override def onSignal: PartialFunction[Signal, Behavior[Command]] = {
+	    case PostStop =>
+	      context.log.info("Device actor {}-{} stopped", groupId, deviceId)
+	      this
+	  }
+	}

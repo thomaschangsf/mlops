@@ -1,0 +1,82 @@
+// --------------------------------
+// Setup
+// --------------------------------
+<-- To set up local db
+	- (1) Use Flywheel
+		* docker-compose.yaml
+			db:
+			    image: postgres
+			    environment:
+			      - POSTGRES_USER=nimbus
+			      - POSTGRES_PASSWORD=nimbus
+			      - POSTGRES_DB=nimbus
+			    volumes:
+			      - nimbus-postgres-data:/var/lib/postgresql/data
+			    ports:
+			      - 54320:5432
+  			flyway:
+			    image: flyway/flyway:latest-alpine
+			    volumes:
+			      - ./flyway/sql:/flyway/sql
+			    environment:
+			      FLYWAY_URL: "jdbc:postgresql://db:5432/nimbus"
+			      FLYWAY_USER: "nimbus"
+			      FLYWAY_PASSWORD: "nimbus"
+			    depends_on:
+			      - db
+			    command:
+			      migrate
+		* in flysyaw/sql/V1_initialize.sql
+			create table if not exist "slt_stats" (
+			    "eid" INTEGER Not NULL,
+			    "day" TIMESTAMP Not NULL,
+			    "name" VARCHAR(256) NOt NULL,
+			    "value" TEXT NOT Null
+			);
+
+			alter table "slt_stats" add constraint "pk_resources" primary key("eid","day", "name");
+
+	- (2) log into db pod
+		dc exec db -it bash 
+
+		enter sql commands	
+
+// --------------------------------
+// SQL + POSTGRES
+// --------------------------------
+- Show tables: \dt
+
+- Show schema of a table: \d+ [TABLE-NAME]
+
+- Samples
+	* exact match to a column value
+		select count(*) from slt_stats where name = 'query-history-freq-perf'
+
+	* value starting with
+		select count(*) from slt_stats where name like 'query-history-freq-perf%';
+
+	* Delete rows
+		DELETE FROM slt_stats where name = 'query-history-freq-perf';
+
+	* Insert multiple rows
+		- Note: for multi line commands, 
+			first line is:  nimbus=#
+			2nd line is: 	nimbus-#
+			terminal knows to escape when it sees ;
+
+		Syntax:
+			INSERT INTO 
+				[Table] ([COLUMN_NAMES])
+			VALUES
+				(v1, v2, v3),
+				(v1, v2, v3)
+
+		INSERT INTO 
+			slt_stats (eid, day, name, value) 
+		VALUES
+			(0, '2022-08-16', 'query-history-freq-perf','appraisal|1.2566,janssen|1.2204,aipac|1.2108,www|1.1177,registering|1.1147,field|1.1120,contact|1.0890,reception|1.0854,congratulations|1.0372'),
+			(0, '2022-08-17', 'query-history-freq-perf','river|11.2566,stream|11.2204,violin|11.2108,www|1.1177,guitar|11.1147,sea|11.1120,contact|1.0890,reception|1.0854,congratulations|1.0372');
+
+
+
+

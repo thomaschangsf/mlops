@@ -1,0 +1,84 @@
+<-- Set up Virtual environments Per Project
+ 	python3 -m venv .venv
+	source .venv/bin/activate
+
+	If project has setup.cfg, setup.py, 
+		pip install -e . --index-url https:/blah  --extra-index-url blah2
+
+	If project has requirements.txt
+		pip isntall -r requirements
+
+	If project follows *.toml
+		poetry shell
+		poetry install
+		poetry pubslih
+
+
+<-- Workflow
+	- .bash_alias.sh set all python and pip to /Users/thomaschang/Documents/dev/git/tutorial/amm_almond/.venv/bin
+		# whereis or which python will point to /usr/bin/python; but the commands/aliases will override
+
+	- jupyter notebook &
+
+	- test
+		python3 -c "import torch"
+
+<-- Conda
+	- Is a way to package depenency
+
+	- Ex: How to include as a dDocker file (ref: git unmask)
+		* Install conda on mac
+		* environment.yml
+			name: myGenApp
+			channels:
+			  - conda-forge
+			  - defaults
+			dependencies:
+			  - python==3.8.10
+			  - flask=2.0.2
+			  - flask-restplus
+			  - gunicorn==20.1.0
+			  - pytorch
+			  - torchvision
+
+		* docker file or teriminal
+			- main point:
+				conda env create --name conda_env --file environment.yml
+				conda clean -ay
+				conda init bash
+
+			- whoel docker file
+			FROM git.infra.igodigital.com:4567/pi/cobaltstarfish/ubuntu:20.04
+
+			RUN apt-get update && apt-get -y install sudo 
+
+			ARG CONDA_VERSION="py38_4.10.3"
+			ARG CONDA_FILE="Miniconda3-${CONDA_VERSION}-Linux-x86_64.sh"
+			ARG CONDA_MD5="14da4a9a44b337f7ccb8363537f65b9c"
+
+			RUN wget https://repo.anaconda.com/miniconda/${CONDA_FILE}
+			RUN echo "$CONDA_MD5 $CONDA_FILE" | md5sum -c \
+			    && bash $CONDA_FILE -b -p /opt/miniconda3 \
+			    && rm $CONDA_FILE
+
+			ENV PATH /opt/miniconda3/bin:$PATH
+
+			RUN conda init bash
+
+			# copy files
+			ENV APP_DIR='/build'
+			WORKDIR $APP_DIR
+			COPY . $APP_DIR
+
+			RUN groupadd -r -g 2058 app_user && useradd -m -u 2058 -g 2058 app_user -s /bin/bash
+			RUN chown -R app_user:app_user /opt/miniconda3 $APP_DIR
+
+			USER app_user
+
+			RUN conda install pycryptosat
+			RUN conda config --set sat_solver pycryptosat 
+			RUN conda env create --name dhf_env --file environment.yml 
+			RUN conda clean -ay 
+			RUN conda init bash 
+
+			ENV PATH /opt/miniconda3/envs/dhf_env/bin:$PATH

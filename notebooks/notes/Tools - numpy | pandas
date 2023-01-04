@@ -1,0 +1,77 @@
+// -----------------------------------------------
+// Setup
+// -----------------------------------------------
+<-- Reference Notebooks
+	wfDevJupyterNotebook || cdNotebooks
+	
+	http://localhost:8888/notebooks/mce/tasks/BotClick/Review-NumPy-Pandas-Scikit.ipynb
+
+	cd /Users/thomaschang/Documents/dev/git/tutorial/amm_almond/mce/tasks/BotClick
+		Bot Click Feature Selection [SageMaker].ipynb
+		Feature Importance [Proto].ipynb
+		Review-NumPy-Pandas-Scikit.ipynb
+
+
+
+
+// -----------------------------------------------
+// Numpy
+// -----------------------------------------------
+
+
+
+
+// -----------------------------------------------
+// Pandas
+// -----------------------------------------------
+- Apply: apply a function on every single row (axis=0) or col(axis=1)
+
+	Ex: Can be used to Create a new column based on a row's column values
+	Given: 
+		df = pd.DataFrame(
+		    [
+		        (1, 'Hello', 158, True, 12.8),
+		        (2, 'Hey', 567, False, 74.2),
+		        (3, 'Hi', 123, False, 1.1),
+		        (4, 'Howdy', 578, True, 45.8),
+		        (5, 'Hello', 418, True, 21.1),
+		        (6, 'Hi', 98, False, 98.1),
+		    ],
+		    columns=['colA', 'colB', 'colC', 'colD', 'colE']
+		)
+
+	df.apply(func, axis)
+		apply a function func along an axis
+
+		axis:
+			0 => apply function to each column; input to function is one column
+			1 => apply function to each row; input to function is one row
+
+		func: input to func is a Series object, either 1 row or 1 column depending on axis
+
+	df['newCol'] = df.apply(lambda row: if row.colA>5 True else False, axis=1)
+
+- Update: Modifies a dataframe wih the content of another dataframe for matching COLUMN names  
+	df = pd.DataFrame({'colA': [1, 2, 3], 'colB': [400, 500, 600]})
+	new_df = pd.DataFrame({'colB': [4, 5, 6], 'colC': [7, 8, 9]})
+	df.update(new_df)
+	df
+
+	output:
+			colA		colB
+		0	1			4
+		1	2			5
+		2	3			6
+
+- Concatenate vs Join
+	Concatenate can combine dfs to grow vertically (axis=0) or grow horizontally(axis=1).  But it assumes no relationship between the data frame, ie no primary keys.  Used to append df from a directory.
+	
+	Join grows dfs horizontally and support primary key columns + join types (inner, left, right)
+
+	Concategate
+		dfGrowHorizon = pd.concat([df3, df4], axis=1)
+		dfGrowVertical = pd.concat([df3, df4], axis=0)
+
+
+	Join
+		dfNew = pd.merge(dfA, dfB, how='inner', left_on=['col1', 'col'], right_on=['col1', 'col'])

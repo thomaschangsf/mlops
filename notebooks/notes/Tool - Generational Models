@@ -1,0 +1,225 @@
+// --------------------------------------------------------
+// Theory: Text Generation
+// --------------------------------------------------------
+<-- References
+	* https://huggingface.co/blog/how-to-generate
+	* book: Natural Language Processing with Transformers
+	* jupyter noteboo: Blog-HF Transformer Generator.ipynb
+		/Users/thomaschang/Documents/dev/git/tutorial/amm_almond/ml/tuning/hf
+	* Quip Document: https://salesforce.quip.com/rG7PAYOrgu2t
+
+<-- Formulating Output Sequence (Greedy vs Beam Search)
+	* autoregressive (aka causal LM) output a token at index t in sequence:
+		- prob(y_1, .., y_t| x) = time (prob(y_t | y<t, x ))
+
+			* note: autoregerssive depends on both 
+				current out seq: y1, ... y_t-1
+				input sequence: x
+
+		- more computation load than a transformer classification model.  We have a big model + large computation !!! (Subject line generation)
+
+
+	* How to output sequence?  this is a seq optimization problem
+
+	* Approach 1: Greedy: at each token, output the most probabble token
+		- Pro: safe and reasonable, because it takes the common route
+
+		- Con: can become repetitive, common words will dominate. goes against elements of good writing, such as surprise, diversity, style
+
+
+		- Code:
+			input_ids = tokenizer.encode('I enjoy walking with my cute dog', return_tensors='tf')
+			greedy_output = model.generate(input_ids, max_length=50)
+			print(tokenizer.decode(greedy_output[0], skip_special_tokens=True))
+
+
+	* Approach 2: Beam search + repetition penalty (no_repeat_ngram_size)
+		- Maintain num_beam hypothesises, in the end choose the most probable one
+
+		- Code:
+			beam_output = model.generate(
+		    input_ids, 
+		    max_length=50, 
+		    num_beams=5, 
+		    no_repeat_ngram_size=2, 
+		    early_stopping=True)
+
+		- Con
+			* human language cannot be captured by max log probabibilty; does not follow distribution of high probabibility of next word
+
+			* hard to control/tune repetition with ngram penality
+
+		- To achieve diversity, and go beyond word distribution, we look into sampling
+
+
+<-- Sampling (Stochstic)
+	* Basic
+		- Sampling refers to choosing a word "randomly", and not just bc it;s the highest probabibility. This introduce "surprise", may lead to diversity
+
+		- Code
+			tf.random.set_seed(0)
+
+			# activate sampling and deactivate top_k by setting top_k sampling to 0
+			sample_output = model.generate(
+			    input_ids, 
+			    do_sample=True, 
+			    max_length=50, 
+			    top_k=0
+			)
+			print(tokenizer.decode(sample_output[0], skip_special_tokens=True))
+
+		- Con: give give rise to incoherence/gibberish
+
+
+	* Improvement 1: Control diversity&incoherence vs coherence&boring with Temp
+		- softmax function converts a vector of K #s to a K probabibilities. It is used in last layer to normalize the logits. 
+			* the value of a logit/class z_i is = e^(B z_i) /  { sum of all classes (e^(B z_j))}
+			* B is 1/T; is a parameter to control/scale the output probabibility of small/large logits 
+				- T is the temperate of the softmax;  
+			* One way to make softmax calculation more efficient (denominator) is to hierarchical softmax, where the node of  a vlaue is the product of log probabibility of all its children
+
+
+		- Values
+			* T << 1 --> more coherence but potentially boring and repetition
+			* T >> 1 --> more diversity but potentialy gibberish
+
+		- Code
+			# use temperature to decrease the sensitivity to low probability candidates
+			sample_output = model.generate(
+			    input_ids, 
+			    do_sample=True, 
+			    max_length=50, 
+			    top_k=0, 
+			    temperature=0.7
+			)
+
+		- PRO/CON
+			how to tune T?  
+
+	* Improvement 2: Top K Sampling
+		- The top k words all have a equal chance of being chosen
+
+		- Code
+			# set top_k to 50
+			sample_output = model.generate(
+			    input_ids, 
+			    do_sample=True, 
+			    max_length=50, 
+			    top_k=50
+			)
+
+		- How to tune k?
+
+	* Improvement 3: Top p (nucleus sampling)
+		- The number of top k is based on the probabibility likelihood mass.  For example, if p=0.9 and the top 6 words gives the probability mass likelihood of 94%, any word in the top 6 have chance of being chosen.
+
+
+
+// --------------------------------------------------------
+// Deployment: TorchScript and IPEX
+// --------------------------------------------------------
+<-- References
+	* Jupyter notebook: Torchscript And IPEX.ipynb
+		/Users/thomaschang/Documents/dev/git/tutorial/amm_almond/ml/tuning/pytorch
+
+	* Quip Document: https://salesforce.quip.com/rG7PAYOrgu2t
+
+<-- Torchscript
+	* Torchscript is a standardized graph representation of a PyTorch model. Torch script models can be deployed across multiple platforms, such as C++ to overcomes the limitations of python’s global interpreter lock. 
+
+	* Torchscript models can be further optimized using IPEX (Intel Extension for PyTorch)
+
+
+<-- IPEX (Intel Extension for Pytorch)
+	* Further optimization for pytorch running on INTEL HW (optmizing common ml torch operations?). IPEX brings BF16 and oneDNN optimizations on CPU
+		- Ex1: Uses OneDNN library for Graph fusion in graph-mode, which combines multiple DL architecture layers: conv2d+relu, cov2d+add+relu, linear+gelu, conv2d+swish
+		- Ex2: IPEX Runtime execution improves efficiency with finer-graned thread control and weight sharing
+		- Ex3: Architecture portability: Instruction set architecture (ISA) map to (AVX512, VNNI, AMX architecture) to increase leverage vectorization + matrix acceleration units.
+			BF16 optimizes fused multiply add
+
+
+
+// --------------------------------------------------------
+// Deployment: DeepSpeed
+// --------------------------------------------------------
+<-- Concpets
+	- Data Parallel (DP)
+		* Input data is de-serialized (aka parallelized) 
+
+		* Input data is atomic at tensor level
+
+		* fed to multiple copies of model
+
+
+	- Tensor Parallel (TP)
+		* Input data tensor is split (non-atmoic) and fed to different gpus
+
+
+	- Pipeline Parallel (PP)
+		* model is split by model layers and distributed to different gpus
+
+
+	- Sharded DDP 
+
+
+
+<-- Implementation: Zero Redundancy Optimizer (ZeRO) 
+	* Illustrates DP and TP
+	
+	* Feature: Support limited gpu memory use case, by offloading to 
+
+	* Data Parallel (DP)
+		- shards the tensor like TP, but unlike TP, tensor is re-synced for forward or backward computation
+
+		- input data is deserizlied, and fed parallel to the multple gpus
+
+		- model layers are split/sharded "horizontally" to multiple gpus which enables tensor parallelism
+
+			* Given: 
+				La | Lb | Lc
+				---|----|---
+				a0 | b0 | c0
+				a1 | b1 | c1
+
+			* Shard to GPU
+				GPU0:
+				La | Lb | Lc
+				---|----|---
+				a0 | b0 | c0
+
+				GPU1:
+				La | Lb | Lc
+				---|----|---
+				a1 | b1 | c1
+
+			* data parallelism
+				x0 => GPU0
+				
+				x1 => GPU1
+
+			* focus on GPU0
+				to calculate b0, GPU0 needs a0 and a1. GPU0 has a0, but a1 is on GPU1. When GPU1 finishes with a1, it will sent the result to GPU0.
+
+				It is important that GPUS 
+					be on same node
+					have fast interconnect, like NVme (vs inter node: NVLink or NVSwich)
+
+
+<-- Naive Model Parallel (MP) and Pipeline Parallel
+	* Aka Vertical Model Parallel (MP)
+		- Split consecutive layers of model to a gpu
+			===================  ===================
+			|  0 | 1 | 2 | 3  |  |  4 | 5 | 6 | 7  |
+			===================  ===================
+			        gpu0                 gpu1
+
+		- Con: gpu1 is idle while gpu0. Sol: Pipeline parallel
+
+	* Pipleline parallel: chunk incoming batch mciro-batches to create a pipeline, improving gpu utilization
+		- see figure on https://huggingface.co/docs/transformers/v4.15.0/parallelism
+
+	* Con: 
+		- need to rewrite model to nn.Sequential
+		- pipeline api can take onle single/tuple of tensors
+		- conditional flow is not possible
+

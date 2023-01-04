@@ -1,0 +1,131 @@
+// ---------------------------------------------
+// Fundamentals
+// 	
+// ---------------------------------------------
+- based on - https://github.com/underscoreio/scalax15-slick/blob/master/scalax15-slick-slides.pdf
+
+
+<-- Table
+
+
+<-- Query
+	- Query[ [QueryType], [ResultType], Collection Type]
+
+
+	- Ex:
+		val q: Query[AlumTable, ALbum, Seq] =
+			AlumTable
+				.filter(a: AlbumTable => a.year === 1987)
+			.map(t => t.id)
+
+		Note: What is Rep? 
+			t.artist  Rep[String]
+			t.id is Rep[Long]
+
+<-- Action
+	val action: Action = query.result
+
+	db.run(action)
+
+
+
+<-- Toy projects
+	cd /Users/thomaschang/Documents/dev/git/tutorial/slick/underscoreio/scalax15-slick
+
+
+
+
+
+
+// ---------------------------------------------
+// Schema
+// ---------------------------------------------
+import java.sql.Date
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+
+object Utils {
+
+  private def dateToString(date: Date, formatter: DateTimeFormatter) =
+    date.toLocalDate.atStartOfDay(ZoneOffset.UTC).format(formatter)
+
+  def toDateTimeString(date: Date): String =
+    dateToString(date, DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS"))
+
+  def toDateString(date: java.sql.Date): String =
+    dateToString(date, DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+}
+
+case class SltStats(
+  eid: Long,
+  day: Date,
+  name: String,
+  value: String
+) {
+  lazy val dayStr = Utils.toDateTimeString(day)
+}
+
+// ---------------------------------------------
+// Query
+//	- notices it refers to the table SlatStatsTable and case class SltStats (aka schema)
+// ---------------------------------------------
+import java.sql.Date
+
+import slick.jdbc.PostgresProfile.api._
+
+import com.salesforce.mce.nimbus.db.SltStatsTable
+import com.salesforce.mce.nimbus.models.SltStats
+
+trait SltStatsQuery {
+
+  protected def table: Query[SltStatsTable, SltStats, Seq]
+
+  def stats(name: String, startDate: Date, endDate: Date) =
+    table.filter(r => r.name === name && r.day >= startDate && r.day <= endDate).result
+
+  def stats(startDate: Date, endDate: Date) =
+    table.filter(r => r.day >= startDate && r.day <= endDate).result
+
+  def stats(name: String) =
+    table.filter(r => r.name === name).result
+
+  def nameLike(namePrefix: String, startDate: Date, endDate: Date) =
+    table.filter(r => r.name.like(s"$namePrefix%") && r.day >= startDate && r.day <= endDate).result
+
+  def nameLike(namePrefix: String) =
+    table.filter(r => r.name.like(s"$namePrefix%")).result
+}
+
+object SltStatsQuery extends SltStatsQuery {
+
+  protected def table: Query[SltStatsTable, SltStats, Seq] = SltStatsTable()
+
+  case class ByEid(eid: Long) extends SltStatsQuery {
+    protected def table: Query[SltStatsTable, SltStats, Seq] = SltStatsTable().filter(_.eid === eid)
+  }
+
+}
+
+// ---------------------------------------------
+// Table
+//	Table refers to the schema
+// ---------------------------------------------
+class SltStatsTable(tag: Tag) extends Table[SltStats](tag, _tableName = "slt_stats") {
+
+  def eid: Rep[Long] = column[Long]("eid")
+  def day: Rep[Date] = column[Date]("day")
+  def name: Rep[String] = column[String]("name")
+  def value: Rep[String] = column[String]("value")
+
+  def primaryKey: PrimaryKey = primaryKey("slt_stats_pkey", (eid, day, name))
+
+  def * : ProvenShape[SltStats] = (
+    eid,
+    day,
+    name,
+    value
+  ).mapTo[SltStats]
+}
+object SltStatsTable {
+  def apply() = new TableQuery(tag => new SltStatsTable(tag))
+}
