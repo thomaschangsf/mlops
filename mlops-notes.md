@@ -684,6 +684,13 @@ Deals with how to host, download multiple models, and serve them from docker con
 
 Candidates: MLFlow, BentoML
 
+## Deep Learning Framework
+    - Compare TorchServe, Tensorflow Serving, and Triton service
+        * Loadtest locally/AWS deep learning models with TorchServe, Tensorflow Serving, and Triton service
+        * Reference: 
+            - https://github.com/Biano-AI/serving-compare-middleware
+            - https://biano-ai.github.io/research/2021/08/16/quantitative-comparison-of-serving-platforms-for-neural-networks.html
+
 # 6 Testing
 ## Code
 ## Data
