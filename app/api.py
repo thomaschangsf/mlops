@@ -13,7 +13,7 @@ from tagifai import main, predict
 
 # Define application
 app = FastAPI(
-    title="TagIfAI - Made With ML",
+    title="MC Kernel Python App",
     description="Classify machine learning projects.",
     version="0.1",
 )
@@ -22,7 +22,9 @@ app = FastAPI(
 @app.on_event("startup")
 def load_artifacts():
     global artifacts
+
     run_id = open(Path(config.CONFIG_DIR, "run_id.txt")).read()
+
     artifacts = main.load_artifacts(run_id=run_id)
     logger.info("Ready for inference!")
 

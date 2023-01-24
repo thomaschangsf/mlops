@@ -479,6 +479,34 @@ Refer to evaluations [opus](https://docs.google.com/document/d/1UGyQ2SNkExHz1_MA
       ├── train.py      - training utilities
       └── utils.py      - supplementary utilities
 
+### Publishing to PyPi
+- [Tutorial1](https://towardsdatascience.com/how-to-publish-a-python-package-to-pypi-7be9dd5d6dcd)
+    * setup.py
+      * setup.py is the build script for setuptools. It tells setuptools about your package (such as the name and version) as well as which code files to include. 
+    * Install necessary packages
+      * pip install –-upgrade setuptools wheel
+      * pip install twine
+    * Build the distribution
+      * python setup.py sdist bdist_wheel
+        * This creates the build and dist directories, and {package}.egg-info
+    * Install package locally
+      * pip install -e .
+      * test: python -c "import {package}
+    * Upload to PyPi 
+      * [test]
+        * twine upload --repository testpypi dist/*
+          * TestPiPi: https://test.pypi
+            * thoamschangsf
+            * TestPyPI123$
+      * [prod]
+        * twine upload dist/*
+          * PyPi: https://pypi.org/
+    * To upgrade package version
+      * pip uninstall textgen
+      * rm -rf .dist && rm -rf .build
+      * pip install -e .
+      * python setup.py sdist bdist_wheel
+      * twine upload --repository testpypi dist/*
 ## Logging
     Components
       - Logger: emits the log messages from our application.
