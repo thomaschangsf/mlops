@@ -145,8 +145,42 @@ mindmap
 3. [Example Text](#example%20text)
 
 
-###### Example
-###### Example2
-###### Example Text
+### Markdown for ML
+- Works in Obsidian
+
+- integration
+$$
+  \int_0^\infty \frac{x^3}{e^x-1}\,dx = \frac{\pi^4}{15}
+$$
+
+- subscript
+$$
+  w_{t+1} = (1 + r_{t+1}) s(w_t) + y_{t+1}
+$$ 
+- summation
+$$
+\sum_{i=1}^{10} t_i
+$$
+
+
+- Use one variable to predict another variable		$$\hat{y}$ = $\theta_0 + \theta_1 x_1$$
+
+- Mean square error
+		$$MSE = \frac{1}{n} \Sigma{i=1}^n({y}-\hat{y})^2$$
+
+- Logistic Regression
+$$J(\Theta) = -\frac{1}{m} \Sigma{i=1}^my^ilog(\hat{y}^i) + (1-y^i)log(1-\hat{y}^i)$$
+
+- Sigmoid
+		$$\Sigma(\Theta^TX)$ = $\frac{1} {1 + e^-\Theta^Tx }$$
+		$$\hat{y} = $\Sigma(\Theta^T X)$$	
+- Cost function
+$$Cost(\hat{y}, y) =  $\frac{1}{2}(\Sigma(\theta^TX)-y)^2$$
+
+
+- References
+  - [md for math reference](https://csrgxtu.github.io/2015/03/20/Writing-Mathematic-Fomulars-in-Markdown/)
+  - [ML exmpales](https://krish9a.medium.com/mathematical-notations-for-machine-learning-markdown-5feb99e8d412)
+
 
 
