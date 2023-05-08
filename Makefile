@@ -5,6 +5,7 @@ SHELL = /bin/bash
 help:
 	@echo "Commands:"
 	@echo "venv    : creates a virtual environment."
+	@echo "static   : executes static analysis."
 	@echo "style   : executes style formatting."
 	@echo "clean   : cleans all unnecessary files."
 	@echo "test    : execute tests on code, data and models."
@@ -35,6 +36,12 @@ clean: style
 	find . | grep -E ".ipynb_checkpoints" | xargs rm -rf
 	find . | grep -E ".trash" | xargs rm -rf
 	rm -f .coverage
+
+# Static Analysis with Radon
+.PHONY: static
+static:
+	# Static analysis on app folder
+	radon cc app/*.py -s
 
 # Test
 .PHONY: test
